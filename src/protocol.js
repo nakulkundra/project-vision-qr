@@ -35,9 +35,17 @@ export async function sha256(bytes) {
   const buf = await crypto.subtle.digest('SHA-256', bytes);
   return new Uint8Array(buf);
 }
+
+const HEX_TABLE = new Array(256);
+for (let n = 0; n <= 255; ++n) {
+  HEX_TABLE[n] = n.toString(16).padStart(2, '0');
+}
+
 export function toHex(bytes) {
   let s = '';
-  for (const b of bytes) s += b.toString(16).padStart(2, '0');
+  for (let i = 0; i < bytes.length; ++i) {
+    s += HEX_TABLE[bytes[i]];
+  }
   return s;
 }
 export function bytesEqual(a, b) {
