@@ -6,7 +6,7 @@
 // index.html so the installed PWA opens offline. Bump CACHE_VERSION whenever
 // any precached file changes to force clients onto the new bundle.
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = `project-vision-${CACHE_VERSION}`;
 
 // Paths are relative to this script's location (the app root), so they work
@@ -48,26 +48,41 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
-  // App navigations: serve the cached shell when the network is unavailable.
+  // App navigations: prefer the network (so a deploy is picked up immediately),
+  // fall back to the cached shell when offline.
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req).catch(() => caches.match('index.html', { ignoreSearch: true }))
+      fetch(req)
+        .then((res) => {
+          if (res && res.ok && res.type === 'basic') {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put('index.html', copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match('index.html', { ignoreSearch: true }))
     );
     return;
   }
 
-  // Everything else: cache-first, fall back to network and populate the cache.
+  // Everything else: NETWORK-FIRST with a cache fallback.
+  //
+  // Deliberately not cache-first. Cache-first means an installed client keeps
+  // running whatever JS it cached until CACHE_VERSION changes — which silently
+  // serves stale app code after a deploy and makes "am I on the latest build?"
+  // impossible to answer. Network-first guarantees a device that has any
+  // connectivity always runs current code, while the cache still makes the app
+  // work fully offline (which is the actual point of this app: load once, then
+  // transfer with no network).
   event.respondWith(
-    caches.match(req, { ignoreSearch: true }).then((hit) => {
-      if (hit) return hit;
-      return fetch(req).then((res) => {
-        // Only cache same-origin, successful, basic responses.
+    fetch(req)
+      .then((res) => {
         if (res && res.ok && res.type === 'basic') {
           const copy = res.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
         }
         return res;
-      });
-    })
+      })
+      .catch(() => caches.match(req, { ignoreSearch: true }))
   );
 });

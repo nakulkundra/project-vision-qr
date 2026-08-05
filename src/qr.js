@@ -31,7 +31,16 @@ export function buildQR(bytes, ecc = 'M') {
   return qr;
 }
 
+// Scratch canvas for one-pixel-per-module rendering, reused across frames.
+let _tiny = null;
+
 // Render frame bytes as a QR onto a canvas, sizing modules to (roughly) fill maxPx.
+//
+// Fast path: paint the QR at 1 pixel per module into a tiny offscreen canvas via
+// a single putImageData, then scale it up with one drawImage and image smoothing
+// disabled. The naive approach issues one fillRect per dark module — 1000-2000+
+// calls per frame for a mid-size QR — which caps the achievable frame rate. This
+// version is O(1) canvas calls and produces pixel-identical crisp output.
 export function renderToCanvas(canvas, bytes, { ecc = 'M', maxPx = 512, margin = 4 } = {}) {
   const qr = buildQR(bytes, ecc);
   const count = qr.getModuleCount();
@@ -39,19 +48,27 @@ export function renderToCanvas(canvas, bytes, { ecc = 'M', maxPx = 512, margin =
   const moduleSize = Math.max(1, Math.floor(maxPx / total));
   const dim = total * moduleSize;
 
-  canvas.width = dim;
-  canvas.height = dim;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, dim, dim);
-  ctx.fillStyle = '#000000';
+  if (!_tiny) _tiny = document.createElement('canvas');
+  if (_tiny.width !== total || _tiny.height !== total) { _tiny.width = total; _tiny.height = total; }
+  const tctx = _tiny.getContext('2d', { willReadFrequently: true });
+  const img = tctx.createImageData(total, total);
+  const px = img.data;
+  px.fill(255); // white, opaque (alpha included)
   for (let r = 0; r < count; r++) {
+    const rowBase = ((r + margin) * total + margin) * 4;
     for (let c = 0; c < count; c++) {
       if (qr.isDark(r, c)) {
-        ctx.fillRect((c + margin) * moduleSize, (r + margin) * moduleSize, moduleSize, moduleSize);
+        const o = rowBase + c * 4;
+        px[o] = 0; px[o + 1] = 0; px[o + 2] = 0; // alpha already 255
       }
     }
   }
+  tctx.putImageData(img, 0, 0);
+
+  if (canvas.width !== dim || canvas.height !== dim) { canvas.width = dim; canvas.height = dim; }
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(_tiny, 0, 0, total, total, 0, 0, dim, dim);
   return qr;
 }
 
@@ -115,11 +132,14 @@ export class Scanner {
         const bytes = decodeScanned(c.rawValue);
         if (bytes) { out.push(bytes); this.decoded++; }
       }
-      // If native keeps detecting nothing decodable, don't get stuck — jsQR is
-      // proven to read these frames, so hand off to it after a short grace.
+      // If native DETECTS QR codes but none of them decode, it is mangling the
+      // payload — hand off to jsQR, which is proven to read these frames.
+      // Only count scans that actually saw a code: an empty `codes` array just
+      // means the camera is not aimed at a QR yet, and counting those would
+      // abandon the fast native path within a fraction of a second of startup.
       if (out.length) {
         this._sinceDecode = 0;
-      } else if (++this._sinceDecode >= 15 && this.decoded === 0) {
+      } else if (codes.length > 0 && ++this._sinceDecode >= 15 && this.decoded === 0) {
         this._fallback();
         return this._scanJsQR(video);
       }
@@ -139,7 +159,9 @@ export class Scanner {
     if (!w || !h || !this._canvas) return [];
     const canvas = this._canvas;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    canvas.width = w; canvas.height = h;
+    // Only resize when the source dimensions actually change: assigning width/
+    // height reallocates and clears the backing store every frame otherwise.
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
     ctx.drawImage(video, 0, 0, w, h);
 
     let rx = 0, ry = 0, rw = w, rh = h;

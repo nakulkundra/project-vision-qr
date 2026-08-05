@@ -11,13 +11,13 @@
   <meta name="apple-mobile-web-app-title" content="QR Transfer" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <style>
-    /* Build v3 theme — deep teal. The background colour is deliberately
+    /* Build v4 theme — deep teal. The background colour is deliberately
        distinct per build so you can tell at a glance (on BOTH devices) that
        you are running the latest deployed version. See #buildBadge. */
     :root {
       --bg: #06231f; --panel: #0c332d; --fg: #eafff8;
       --muted: #8fc7ba; --accent: #2fd7a2; --ok: #46d39a; --bad: #ff6b81;
-      --border: #14544a;
+      --border: #14544a; --sunken: #041916;
     }
     * { box-sizing: border-box; }
     body {
@@ -33,19 +33,19 @@
       flex: 1; padding: 10px; border: 1px solid var(--border); background: var(--panel);
       color: var(--fg); border-radius: 8px; cursor: pointer; font-size: 14px;
     }
-    .tabs button.active { background: var(--accent); color: #08122b; border-color: var(--accent); font-weight: 600; }
+    .tabs button.active { background: var(--accent); color: #04211c; border-color: var(--accent); font-weight: 600; }
     .panel { display: none; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
     .panel.active { display: block; }
     label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
     input[type=file], select, input[type=number] {
-      width: 100%; padding: 8px; background: #0d1024; color: var(--fg);
+      width: 100%; padding: 8px; background: var(--sunken); color: var(--fg);
       border: 1px solid var(--border); border-radius: 8px; font-size: 14px;
     }
     .row { display: flex; gap: 12px; }
     .row > div { flex: 1; }
     button.action {
       margin-top: 14px; width: 100%; padding: 12px; border: none; border-radius: 8px;
-      background: var(--accent); color: #08122b; font-size: 15px; font-weight: 600; cursor: pointer;
+      background: var(--accent); color: #04211c; font-size: 15px; font-weight: 600; cursor: pointer;
     }
     button.action.secondary { background: var(--panel); color: var(--fg); border: 1px solid var(--border); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -53,13 +53,13 @@
     video { width: 100%; max-height: 320px; border-radius: 8px; background: #000; margin-top: 12px; }
     .stat { font-size: 13px; color: var(--muted); margin-top: 10px; }
     .stat b { color: var(--fg); }
-    .bar { height: 10px; background: #0d1024; border-radius: 6px; overflow: hidden; margin-top: 8px; border: 1px solid var(--border); }
+    .bar { height: 10px; background: var(--sunken); border-radius: 6px; overflow: hidden; margin-top: 8px; border: 1px solid var(--border); }
     .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
     .result { margin-top: 14px; padding: 12px; border-radius: 8px; border: 1px solid var(--border); }
     .result.ok { border-color: var(--ok); }
     .result.bad { border-color: var(--bad); }
     a.download { color: var(--accent); font-weight: 600; }
-    pre.log { background: #0d1024; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 12px; overflow: auto; max-height: 320px; white-space: pre-wrap; }
+    pre.log { background: var(--sunken); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 12px; overflow: auto; max-height: 320px; white-space: pre-wrap; }
     .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
     .warn { color: var(--bad); }
   </style>
@@ -67,7 +67,7 @@
 <body>
   <header style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
     <div>
-      <h1>Project Vision <span id="buildBadge" style="font-size:12px; font-weight:600; background:var(--accent); color:#06231f; padding:2px 8px; border-radius:999px; vertical-align:middle;">BUILD v3 · teal</span></h1>
+      <h1>Project Vision <span id="buildBadge" style="font-size:12px; font-weight:600; background:var(--accent); color:#06231f; padding:2px 8px; border-radius:999px; vertical-align:middle;">BUILD v4 · turbo</span></h1>
       <p>Transfer a file device-to-device with no network — through a stream of animated QR codes.</p>
       <p id="offlineStatus" class="stat" style="margin-top:6px; color:var(--muted);"></p>
     </div>
@@ -87,16 +87,20 @@
       <div class="row">
         <div>
           <label for="blockSize">Block size (bytes)</label>
-          <input type="number" id="blockSize" value="128" min="16" max="1024" />
+          <input type="number" id="blockSize" value="256" min="16" max="2048" />
         </div>
         <div>
           <label for="ecc">Error correction</label>
-          <select id="ecc"><option>L</option><option selected>M</option><option>Q</option><option>H</option></select>
+          <select id="ecc"><option selected>L</option><option>M</option><option>Q</option><option>H</option></select>
         </div>
         <div>
           <label for="fps">Frames / sec</label>
-          <input type="number" id="fps" value="8" min="1" max="20" />
+          <input type="number" id="fps" value="12" min="1" max="30" />
         </div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <button class="action secondary" id="presetSafe" style="margin-top:0;">Reliable (128 · M · 8)</button>
+        <button class="action secondary" id="presetTurbo" style="margin-top:0;">Turbo (512 · L · 15)</button>
       </div>
       <button class="action" id="startSend">Start transmitting</button>
       <button class="action secondary" id="stopSend" disabled>Stop</button>

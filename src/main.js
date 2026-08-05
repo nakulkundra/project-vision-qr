@@ -2,7 +2,7 @@
 
 import { Sender } from './sender.js';
 import { Receiver } from './receiver.js';
-import { renderToCanvas, Scanner } from './qr.js';
+import { renderToCanvas, buildQR, Scanner } from './qr.js';
 import { toHex } from './protocol.js';
 import { codecLoopback, opticalLoopback } from './selftest.js';
 
@@ -28,27 +28,46 @@ async function startSend() {
   const file = fileInput.files[0];
   const bytes = new Uint8Array(await file.arrayBuffer());
 
-  const blockSize = Math.max(16, Math.min(1024, +$('blockSize').value || 128));
+  const blockSize = Math.max(16, Math.min(2048, +$('blockSize').value || 256));
   const ecc = $('ecc').value;
-  const fps = Math.max(1, Math.min(20, +$('fps').value || 8));
+  const fps = Math.max(1, Math.min(30, +$('fps').value || 12));
 
   const sender = await new Sender(bytes, file.name, { blockSize }).init();
   frameNo = 0;
-  $('sendStat').innerHTML =
+  const baseStat =
     `File <b>${escapeHtml(file.name)}</b> · ${bytes.length} bytes · ` +
     `K=<b>${sender.K}</b> blocks · session <b>${sender.sessionId.toString(16).padStart(4, '0')}</b> · ` +
     `SHA-256 <b>${toHex(sender.hash).slice(0, 12)}…</b>`;
 
   const canvas = $('qr');
+  // Use the full available width — bigger modules on screen are the single
+  // biggest factor in whether a phone can decode a dense QR.
+  const maxPx = Math.min(canvas.parentElement.clientWidth, 640);
+
+  // Density guidance. Measure a representative DATA frame, not the first frame
+  // (which is a small META frame and would under-report density — the unsafe
+  // direction, since it is the dense DATA frames a camera struggles with).
+  // Empirically: 109 modules failed to decode at ~5px/module; 81 decoded fine.
+  const perFrame = blockSize + 9; // 5-byte header + 4-byte seed + payload
+  const dataModules = buildQR(new Uint8Array(perFrame), ecc).getModuleCount();
+  const theoretical = ((perFrame * fps) / 1024).toFixed(1);
+  const pxPerModule = (maxPx / (dataModules + 8)).toFixed(1);
+  const dense = dataModules >= 100 || pxPerModule < 4;
+  const statLine = baseStat +
+    ` · QR <b>${dataModules}×${dataModules}</b> (${pxPerModule}px/module) · ~<b>${theoretical} KB/s</b> ceiling` +
+    (dense ? ` · <span class="warn">very dense — if the receiver can't read it, tap "Reliable" or lower the block size</span>` : '');
+  $('sendStat').innerHTML = statLine;
+
   const tick = () => {
     const frame = sender.nextFrame();
-    renderToCanvas(canvas, frame, { ecc, maxPx: Math.min(canvas.parentElement.clientWidth, 480) });
+    renderToCanvas(canvas, frame, { ecc, maxPx });
     frameNo++;
     const kind = frame[4] === 1 ? 'META' : 'DATA';
     $('sendStat').dataset.frame = frameNo;
     $('sendStat').title = `frame #${frameNo} (${kind})`;
   };
   tick();
+
   sendTimer = setInterval(tick, Math.round(1000 / fps));
   $('startSend').disabled = true;
   $('stopSend').disabled = false;
@@ -64,17 +83,36 @@ function stopSend() {
 $('startSend').addEventListener('click', () => startSend().catch((e) => alert(e.message)));
 $('stopSend').addEventListener('click', stopSend);
 
+// One-tap presets. Turbo trades per-frame QR error correction for payload — the
+// fountain code already recovers whole dropped frames, so the ECC redundancy is
+// largely duplicated work. Reliable is the fallback for poor light/shaky hands.
+function applyPreset(blockSize, ecc, fps) {
+  $('blockSize').value = String(blockSize);
+  $('ecc').value = ecc;
+  $('fps').value = String(fps);
+  if (sendTimer) { stopSend(); startSend().catch((e) => alert(e.message)); }
+}
+$('presetSafe')?.addEventListener('click', () => applyPreset(128, 'M', 8));
+$('presetTurbo')?.addEventListener('click', () => applyPreset(512, 'L', 15));
+
 // ============================== RECEIVE =======================================
 let stream = null;
 let scanning = false;
 let receiver = null;
 let scanner = null;
 let scanFps = 0, _scanFrames = 0, _scanFpsAt = 0;
+let _rxStart = 0; // timestamp of first progress event, for throughput/ETA
 
 async function startRecv() {
   try {
+    // Higher resolution resolves denser QR codes (which is what lets us raise
+    // the payload per frame); a high frameRate raises the scan ceiling.
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: {
+        facingMode: 'environment',
+        width: { ideal: 1920 }, height: { ideal: 1080 },
+        frameRate: { ideal: 30 },
+      },
     });
   } catch (e) {
     $('recvHint').innerHTML =
@@ -89,13 +127,25 @@ async function startRecv() {
   receiver = new Receiver(onProgress, onDone);
   scanner = await new Scanner().init();
   scanning = true;
-  _scanFrames = 0; _scanFpsAt = performance.now(); scanFps = 0;
+  _scanFrames = 0; _scanFpsAt = performance.now(); scanFps = 0; _rxStart = 0;
   $('startRecv').disabled = true;
   $('stopRecv').disabled = false;
   $('recvResult').innerHTML = '';
   $('recvStat').textContent =
     `Scanning (${scanner.mode === 'native' ? 'native BarcodeDetector' : 'jsQR'})… point at the sender screen.`;
   scanLoop();
+}
+
+// Schedule the next scan pass. requestVideoFrameCallback fires once per NEW
+// camera frame, so we never burn CPU re-scanning a frame we already read and
+// never miss one; requestAnimationFrame (display refresh) is the fallback.
+function scheduleScan(video) {
+  if (!scanning) return;
+  if (typeof video.requestVideoFrameCallback === 'function') {
+    video.requestVideoFrameCallback(() => scanLoop());
+  } else {
+    requestAnimationFrame(() => scanLoop());
+  }
 }
 
 async function scanLoop() {
@@ -123,17 +173,26 @@ async function scanLoop() {
       }
     }
   }
-  if (scanning) requestAnimationFrame(scanLoop);
+  scheduleScan(video);
 }
 
 function onProgress(p) {
   if (p.K) {
     const pct = Math.round((p.recovered / p.K) * 100);
     $('recvBar').style.width = pct + '%';
-    const rate = scanFps ? ` · ~${scanFps} scans/s (${scanner?.mode === 'native' ? 'native' : 'jsQR'})` : '';
+    // Effective throughput: useful bytes recovered per second since lock-on.
+    if (!_rxStart) _rxStart = performance.now();
+    const secs = (performance.now() - _rxStart) / 1000;
+    const gotBytes = p.recovered * (receiver?.meta?.blockSize || 0);
+    const kbs = secs > 0.5 ? (gotBytes / 1024 / secs).toFixed(1) : null;
+    const mode = scanner?.autoFellBack ? 'jsQR' : (scanner?.mode === 'native' ? 'native' : 'jsQR');
+    const rate = scanFps ? ` · ~${scanFps} scans/s (${mode})` : '';
+    const thru = kbs ? ` · <b>${kbs} KB/s</b>` : '';
+    const eta = (kbs > 0 && p.recovered > 0)
+      ? ` · ETA ${Math.max(0, Math.round(((p.K - p.recovered) * (receiver.meta.blockSize)) / (gotBytes / secs)))}s` : '';
     $('recvStat').innerHTML =
       `Receiving <b>${escapeHtml(p.filename || '')}</b> · ` +
-      `recovered <b>${p.recovered}/${p.K}</b> blocks (${pct}%) · ${p.packetsSeen} packets seen${rate}`;
+      `recovered <b>${p.recovered}/${p.K}</b> blocks (${pct}%) · ${p.packetsSeen} packets${rate}${thru}${eta}`;
   } else {
     $('recvStat').innerHTML = `Waiting for a META frame… (${p.packetsSeen} data packets buffered)`;
   }
