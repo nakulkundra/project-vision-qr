@@ -143,7 +143,7 @@ export class Receiver {
     if (this._finishing) return this.result;
     this._finishing = true;
     const raw = this.decoder.assemble();
-    const bytes = raw.slice(0, this.meta.fileSize);
+    const bytes = raw.subarray(0, this.meta.fileSize);
     const digest = await sha256(bytes);
     const verified = bytesEqual(digest, this.meta.sha256);
     this.done = true;
