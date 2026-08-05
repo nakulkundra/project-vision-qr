@@ -71,5 +71,22 @@ async function restartScenario(feedUntilProgress) {
   ok('onDone fired exactly once', calls === 1, `calls=${calls} buffered=${bufferedCount}`);
   ok('buffered flush still verifies', !!(rx.result && rx.result.verified));
 }
+
+// ---- parseFrame malformed input testing ----
+{
+  ok('parseFrame rejects null', parseFrame(null) === null);
+  ok('parseFrame rejects undefined', parseFrame(undefined) === null);
+  ok('parseFrame rejects short buffer', parseFrame(new Uint8Array([0x51, 1, 0, 0])) === null);
+
+  const validData = buildData({ sessionId: 0x1234, seed: 0, payload: new Uint8Array(10) });
+
+  const badMagic = new Uint8Array(validData);
+  badMagic[0] = 0x99;
+  ok('parseFrame rejects bad magic', parseFrame(badMagic) === null);
+
+  const badVersion = new Uint8Array(validData);
+  badVersion[1] = 0x99;
+  ok('parseFrame rejects bad version', parseFrame(badVersion) === null);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
