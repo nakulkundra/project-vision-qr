@@ -1,13 +1,13 @@
-// qr.js — thin wrappers over the two vendored libraries (browser-only).
+// qr.js — QR generation + scanning (browser-only).
 //
-//   generation: qrcode-generator (window.qrcode), Byte mode + Latin-1 carrier
-//   scanning:   jsQR (window.jsQR), using its binaryData output
+//   generation: qrcode-generator (window.qrcode), base45 + Alphanumeric mode
+//   scanning:   Scanner class — native BarcodeDetector fast-path (hardware
+//               accelerated) with a jsQR fallback that crops to the tracked QR
+//               region to keep per-frame decode cost low.
 //
-// We deliberately use jsQR's binaryData rather than the native BarcodeDetector:
-// BarcodeDetector only reliably returns a decoded *string*, which mangles the
-// raw binary payloads this protocol sends. jsQR hands back the exact bytes.
+// Both scanners read the same base45/alphanumeric frames (see transport.js).
 
-import { bytesToLatin1, latin1ToBytes } from './protocol.js';
+import { encodeBase45, decodeBase45 } from './transport.js';
 
 function getQrLib() {
   if (typeof window === 'undefined' || !window.qrcode) {
@@ -22,18 +22,16 @@ function getJsQR() {
   return window.jsQR;
 }
 
-// Build a QR model for the given bytes. ecc: 'L' | 'M' | 'Q' | 'H'.
-// typeNumber 0 => auto-pick the smallest version that fits.
+// Build a QR model for the given frame bytes (base45 + Alphanumeric mode).
 export function buildQR(bytes, ecc = 'M') {
   const qrcode = getQrLib();
-  const qr = qrcode(0, ecc);
-  qr.addData(bytesToLatin1(bytes), 'Byte');
+  const qr = qrcode(0, ecc); // 0 => auto-pick the smallest version that fits
+  qr.addData(encodeBase45(bytes), 'Alphanumeric');
   qr.make();
   return qr;
 }
 
-// Render bytes as a QR onto a canvas, sizing modules to (roughly) fill maxPx.
-// Returns the QR model (useful for reading getModuleCount()).
+// Render frame bytes as a QR onto a canvas, sizing modules to (roughly) fill maxPx.
 export function renderToCanvas(canvas, bytes, { ecc = 'M', maxPx = 512, margin = 4 } = {}) {
   const qr = buildQR(bytes, ecc);
   const count = qr.getModuleCount();
@@ -57,23 +55,102 @@ export function renderToCanvas(canvas, bytes, { ecc = 'M', maxPx = 512, margin =
   return qr;
 }
 
-// Decode a QR from an ImageData. Returns Uint8Array of the raw bytes, or null.
+// Decode a QR from an ImageData (jsQR). Returns frame bytes, or null.
+// Used by the optical self-test and by the Scanner's jsQR fallback.
 export function scanImageData(imageData) {
   const jsQR = getJsQR();
-  const result = jsQR(imageData.data, imageData.width, imageData.height, {
-    inversionAttempts: 'dontInvert',
-  });
-  if (!result || !result.binaryData || !result.binaryData.length) return null;
-  return Uint8Array.from(result.binaryData);
+  const res = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+  if (!res || !res.data) return null;
+  return decodeBase45(res.data);
 }
 
-// Convenience for the optical self-test: render bytes, read them straight back
-// off the canvas, and decode — exercises the full generate→scan path in-page.
-export function roundTripThroughCanvas(bytes, canvas, opts = {}) {
-  renderToCanvas(canvas, bytes, opts);
-  const ctx = canvas.getContext('2d');
-  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  return scanImageData(img);
+// ---------------------------------------------------------------------------
+// Scanner: strategy object for the live camera loop.
+//   - Prefers the native BarcodeDetector (fast, hardware-accelerated). It can
+//     also return MULTIPLE codes per frame.
+//   - Falls back to jsQR, cropping to the last-seen QR bounding box so decode
+//     cost tracks the QR size, not the whole camera frame.
+// scanVideo(video) returns an array of decoded frame-byte Uint8Arrays.
+// ---------------------------------------------------------------------------
+export class Scanner {
+  constructor() {
+    this.detector = null;
+    this.mode = 'jsqr';        // 'native' | 'jsqr'
+    this._canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+    this.roi = null;           // { x, y, w, h } in video pixels, or null = full
+    this._miss = 0;
+  }
+
+  async init() {
+    if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
+      try {
+        const formats = await window.BarcodeDetector.getSupportedFormats();
+        if (formats.includes('qr_code')) {
+          this.detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+          this.mode = 'native';
+        }
+      } catch { /* fall back to jsQR */ }
+    }
+    return this;
+  }
+
+  async scanVideo(video) {
+    if (this.mode === 'native') {
+      try {
+        const codes = await this.detector.detect(video);
+        const out = [];
+        for (const c of codes) {
+          const bytes = decodeBase45(c.rawValue);
+          if (bytes) out.push(bytes);
+        }
+        return out;
+      } catch {
+        this.mode = 'jsqr'; // some devices throw intermittently — degrade once
+      }
+    }
+    return this._scanJsQR(video);
+  }
+
+  _scanJsQR(video) {
+    const w = video.videoWidth, h = video.videoHeight;
+    if (!w || !h || !this._canvas) return [];
+    const canvas = this._canvas;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    canvas.width = w; canvas.height = h;
+    ctx.drawImage(video, 0, 0, w, h);
+
+    let rx = 0, ry = 0, rw = w, rh = h;
+    if (this.roi) { rx = this.roi.x; ry = this.roi.y; rw = this.roi.w; rh = this.roi.h; }
+
+    const img = ctx.getImageData(rx, ry, rw, rh);
+    const jsQR = getJsQR();
+    const res = jsQR(img.data, rw, rh, { inversionAttempts: 'dontInvert' });
+    if (res && res.data) {
+      this._updateROI(res.location, rx, ry, w, h);
+      this._miss = 0;
+      const bytes = decodeBase45(res.data);
+      return bytes ? [bytes] : [];
+    }
+    if (++this._miss > 3) this.roi = null; // lost it — widen back to full frame
+    return [];
+  }
+
+  // Grow the ROI to the QR's bounding box (in full-frame coords) plus padding,
+  // so small motion between frames stays inside the crop.
+  _updateROI(loc, offX, offY, w, h) {
+    if (!loc) { this.roi = null; return; }
+    const xs = [loc.topLeftCorner, loc.topRightCorner, loc.bottomLeftCorner, loc.bottomRightCorner].map((p) => p.x + offX);
+    const ys = [loc.topLeftCorner, loc.topRightCorner, loc.bottomLeftCorner, loc.bottomRightCorner].map((p) => p.y + offY);
+    let minX = Math.min(...xs), maxX = Math.max(...xs);
+    let minY = Math.min(...ys), maxY = Math.max(...ys);
+    const padX = (maxX - minX) * 0.45, padY = (maxY - minY) * 0.45;
+    minX = Math.max(0, Math.floor(minX - padX));
+    minY = Math.max(0, Math.floor(minY - padY));
+    maxX = Math.min(w, Math.ceil(maxX + padX));
+    maxY = Math.min(h, Math.ceil(maxY + padY));
+    const rw = maxX - minX, rh = maxY - minY;
+    this.roi = rw > 16 && rh > 16 ? { x: minX, y: minY, w: rw, h: rh } : null;
+  }
 }
 
-export { bytesToLatin1, latin1ToBytes };
+export { encodeBase45, decodeBase45 };

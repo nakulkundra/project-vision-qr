@@ -115,5 +115,19 @@ built-in Web Crypto `SubtleCrypto`; the LT codec is implemented in-repo.
 - **No encryption** — SHA-256 here is integrity, not secrecy. Encrypt the file
   before sending if you need confidentiality.
 - **No back-channel / acknowledgments** — unnecessary with fountain codes.
-- Scanning uses **jsQR** (binary-safe) rather than the native `BarcodeDetector`,
-  which only reliably returns decoded strings and would corrupt binary payloads.
+## Scanning speed
+
+Frames are carried as **base45** (RFC 9285) in QR **Alphanumeric** mode. base45's
+alphabet is exactly QR's alphanumeric charset, so it costs only ~3% more than raw
+byte mode yet — unlike raw binary — survives string-only decoders. That lets the
+receiver prefer the phone's native, hardware-accelerated **`BarcodeDetector`**
+(much faster than software decoding), and fall back to **jsQR** where it isn't
+available (e.g. desktop Chrome on Windows/Linux, Firefox). The jsQR fallback
+crops each scan to the last-seen QR bounding box so decode cost tracks the QR
+size, not the whole camera frame. The Receive tab shows which scanner is active
+and a live scans/sec readout.
+
+Because the transfer already has two independent redundancy layers — QR's own
+error correction (in-frame) and the fountain code (whole dropped frames) — you
+can safely lower QR error correction to **L** on the Send tab to pack more data
+per frame; the fountain layer still covers lost frames.

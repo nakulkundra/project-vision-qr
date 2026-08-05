@@ -1,0 +1,64 @@
+// transport.js — base45 <-> bytes, the on-QR carrier encoding.
+//
+// Why base45 (RFC 9285) instead of raw binary byte-mode?  The native
+// BarcodeDetector API (hardware-accelerated on most phones, ~3-5x faster than
+// jsQR) only returns a decoded *string*, which corrupts binary payloads.
+// base45's 45-symbol alphabet is exactly QR's Alphanumeric charset, so:
+//   * it survives BarcodeDetector's string output intact, AND
+//   * QR Alphanumeric mode packs it at ~8.25 bits/byte — only ~3% larger than
+//     raw byte mode, far cheaper than base64's 33% overhead.
+// So we wrap each binary protocol frame in base45 and render it in Alphanumeric
+// mode; both the native scanner and jsQR can read it. Pure module (no DOM).
+
+const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
+const CHAR_TO_VAL = (() => {
+  const m = new Int16Array(128).fill(-1);
+  for (let i = 0; i < ALPHABET.length; i++) m[ALPHABET.charCodeAt(i)] = i;
+  return m;
+})();
+
+// Encode bytes -> base45 string.
+export function encodeBase45(bytes) {
+  let out = '';
+  let i = 0;
+  for (; i + 1 < bytes.length; i += 2) {
+    let n = bytes[i] * 256 + bytes[i + 1]; // 0..65535 -> exactly 3 symbols
+    out += ALPHABET[n % 45]; n = (n - (n % 45)) / 45;
+    out += ALPHABET[n % 45]; n = (n - (n % 45)) / 45;
+    out += ALPHABET[n % 45];
+  }
+  if (i < bytes.length) {
+    let n = bytes[i]; // single trailing byte -> 2 symbols
+    out += ALPHABET[n % 45]; n = (n - (n % 45)) / 45;
+    out += ALPHABET[n % 45];
+  }
+  return out;
+}
+
+// Decode base45 string -> Uint8Array. Returns null on any malformed input
+// (fail closed — a garbled scan is simply dropped; the fountain layer recovers).
+export function decodeBase45(str) {
+  if (str == null) return null;
+  const n = str.length;
+  if (n % 3 === 1) return null; // impossible base45 length
+  const out = [];
+  let i = 0;
+  for (; i + 2 < n; i += 3) {
+    const a = CHAR_TO_VAL[str.charCodeAt(i)] ?? -1;
+    const b = CHAR_TO_VAL[str.charCodeAt(i + 1)] ?? -1;
+    const c = CHAR_TO_VAL[str.charCodeAt(i + 2)] ?? -1;
+    if (a < 0 || b < 0 || c < 0) return null;
+    const v = a + b * 45 + c * 45 * 45;
+    if (v > 0xffff) return null;
+    out.push((v >> 8) & 0xff, v & 0xff);
+  }
+  if (i < n) { // trailing pair -> 1 byte
+    const a = CHAR_TO_VAL[str.charCodeAt(i)] ?? -1;
+    const b = CHAR_TO_VAL[str.charCodeAt(i + 1)] ?? -1;
+    if (a < 0 || b < 0) return null;
+    const v = a + b * 45;
+    if (v > 0xff) return null;
+    out.push(v);
+  }
+  return Uint8Array.from(out);
+}

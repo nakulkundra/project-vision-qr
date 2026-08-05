@@ -2,7 +2,7 @@
 
 import { Sender } from './sender.js';
 import { Receiver } from './receiver.js';
-import { renderToCanvas, scanImageData } from './qr.js';
+import { renderToCanvas, Scanner } from './qr.js';
 import { toHex } from './protocol.js';
 import { codecLoopback, opticalLoopback } from './selftest.js';
 
@@ -68,7 +68,8 @@ $('stopSend').addEventListener('click', stopSend);
 let stream = null;
 let scanning = false;
 let receiver = null;
-const scanCanvas = document.createElement('canvas');
+let scanner = null;
+let scanFps = 0, _scanFrames = 0, _scanFpsAt = 0;
 
 async function startRecv() {
   try {
@@ -86,38 +87,44 @@ async function startRecv() {
   await video.play();
 
   receiver = new Receiver(onProgress, onDone);
+  scanner = await new Scanner().init();
   scanning = true;
+  _scanFrames = 0; _scanFpsAt = performance.now(); scanFps = 0;
   $('startRecv').disabled = true;
   $('stopRecv').disabled = false;
   $('recvResult').innerHTML = '';
-  $('recvStat').textContent = 'Scanning… point at the sender screen.';
-  requestAnimationFrame(scanLoop);
+  $('recvStat').textContent =
+    `Scanning (${scanner.mode === 'native' ? 'native BarcodeDetector' : 'jsQR'})… point at the sender screen.`;
+  scanLoop();
 }
 
-function scanLoop() {
+async function scanLoop() {
   if (!scanning) return;
   const video = $('video');
   if (video.readyState === video.HAVE_ENOUGH_DATA) {
-    const w = video.videoWidth, h = video.videoHeight;
-    if (w && h) {
-      scanCanvas.width = w; scanCanvas.height = h;
-      const ctx = scanCanvas.getContext('2d', { willReadFrequently: true });
-      ctx.drawImage(video, 0, 0, w, h);
-      const img = ctx.getImageData(0, 0, w, h);
-      const decoded = scanImageData(img);
-      if (decoded) receiver.onFrame(decoded);
+    try {
+      const frames = await scanner.scanVideo(video);
+      for (const bytes of frames) receiver.onFrame(bytes);
+    } catch { /* transient scan error — skip this frame */ }
+    // Rolling scan-rate estimate (frames processed per second).
+    _scanFrames++;
+    const now = performance.now();
+    if (now - _scanFpsAt >= 500) {
+      scanFps = Math.round((_scanFrames * 1000) / (now - _scanFpsAt));
+      _scanFrames = 0; _scanFpsAt = now;
     }
   }
-  requestAnimationFrame(scanLoop);
+  if (scanning) requestAnimationFrame(scanLoop);
 }
 
 function onProgress(p) {
   if (p.K) {
     const pct = Math.round((p.recovered / p.K) * 100);
     $('recvBar').style.width = pct + '%';
+    const rate = scanFps ? ` · ~${scanFps} scans/s (${scanner?.mode === 'native' ? 'native' : 'jsQR'})` : '';
     $('recvStat').innerHTML =
       `Receiving <b>${escapeHtml(p.filename || '')}</b> · ` +
-      `recovered <b>${p.recovered}/${p.K}</b> blocks (${pct}%) · ${p.packetsSeen} packets seen`;
+      `recovered <b>${p.recovered}/${p.K}</b> blocks (${pct}%) · ${p.packetsSeen} packets seen${rate}`;
   } else {
     $('recvStat').innerHTML = `Waiting for a META frame… (${p.packetsSeen} data packets buffered)`;
   }
