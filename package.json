@@ -5,6 +5,6 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "node test/node-selftest.mjs && node test/regress.mjs"
+    "test": "node test/node-selftest.mjs && node test/regress.mjs && node test/protocol.mjs"
   }
 }
