@@ -149,6 +149,21 @@ async function startRecv() {
   // for 1080p on the jsQR path was a real throughput regression.
   scanner = await new Scanner().init();
   const wantHiRes = scanner.mode === 'native';
+  if (!(await setupCamera(wantHiRes))) return;
+
+  receiver = new Receiver(onProgress, onDone);
+  scanning = true;
+  _scanFrames = 0; _scanFpsAt = performance.now(); scanFps = 0; _rxStart = 0;
+  $('startRecv').disabled = true;
+  $('stopRecv').disabled = false;
+  $('recvResult').innerHTML = '';
+  $('recvStat').textContent =
+    `Scanning (${scanner.mode === 'native' ? 'native BarcodeDetector' : 'jsQR'})… point at the sender screen.`;
+  scanLoop();
+  startScanWatchdog();
+}
+
+async function setupCamera(wantHiRes) {
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
@@ -162,7 +177,7 @@ async function startRecv() {
     $('recvHint').innerHTML =
       `<span class="warn">Camera blocked:</span> ${escapeHtml(e.message)}. ` +
       `A camera requires HTTPS or localhost — see the README.`;
-    return;
+    return false;
   }
   const video = $('video');
   video.srcObject = stream;
@@ -175,17 +190,7 @@ async function startRecv() {
     const s = stream.getVideoTracks()[0]?.getSettings?.() || {};
     camInfo = `${s.width || '?'}×${s.height || '?'}@${Math.round(s.frameRate || 0) || '?'}fps`;
   } catch { camInfo = ''; }
-
-  receiver = new Receiver(onProgress, onDone);
-  scanning = true;
-  _scanFrames = 0; _scanFpsAt = performance.now(); scanFps = 0; _rxStart = 0;
-  $('startRecv').disabled = true;
-  $('stopRecv').disabled = false;
-  $('recvResult').innerHTML = '';
-  $('recvStat').textContent =
-    `Scanning (${scanner.mode === 'native' ? 'native BarcodeDetector' : 'jsQR'})… point at the sender screen.`;
-  scanLoop();
-  startScanWatchdog();
+  return true;
 }
 
 // Schedule the next scan pass. requestVideoFrameCallback fires once per NEW
