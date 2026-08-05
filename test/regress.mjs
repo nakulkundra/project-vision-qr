@@ -1,4 +1,4 @@
-import { decodeScanned, encodeBase45, isFrameShaped } from '../src/transport.js';
+import { decodeScanned, encodeBase45, decodeBase45, isFrameShaped } from '../src/transport.js';
 import { buildMeta, buildData, parseFrame } from '../src/protocol.js';
 import { Receiver } from '../src/receiver.js';
 import { Sender } from '../src/sender.js';
@@ -7,6 +7,9 @@ let pass = 0, fail = 0;
 const ok = (name, cond, extra='') => { if (cond) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
 
 // ---- FIX 1: decodeScanned must fail closed on non-frame garbage ----
+ok('decodeBase45 rejects invalid length 1', decodeBase45('A') === null);
+ok('decodeBase45 rejects invalid length 4', decodeBase45('AAAA') === null);
+
 const garbage = 'ABCDEF0123456789';            // in-alphabet, length%3 != 1
 ok('garbage rejected (fail closed)', decodeScanned(garbage) === null, JSON.stringify(decodeScanned(garbage)?.slice(0,6)));
 const meta = buildMeta({ sessionId: 0x1234, K: 5, blockSize: 96, fileSize: 400, sha256: new Uint8Array(32).fill(7), filename: 'a.txt' });
