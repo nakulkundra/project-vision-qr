@@ -1,0 +1,10 @@
+{
+  "name": "project-vision",
+  "version": "0.1.0",
+  "description": "Offline file transfer between devices via a stream of animated QR codes (fountain-coded).",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node test/node-selftest.mjs"
+  }
+}

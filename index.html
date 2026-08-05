@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Vision — QR file transfer</title>
+  <style>
+    :root {
+      --bg: #0f1220; --panel: #1a1e33; --fg: #e8eaf5;
+      --muted: #9aa3c7; --accent: #6ea8fe; --ok: #46d39a; --bad: #ff6b81;
+      --border: #2b3157;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.5;
+    }
+    header { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    header h1 { margin: 0; font-size: 18px; }
+    header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    main { max-width: 720px; margin: 0 auto; padding: 16px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tabs button {
+      flex: 1; padding: 10px; border: 1px solid var(--border); background: var(--panel);
+      color: var(--fg); border-radius: 8px; cursor: pointer; font-size: 14px;
+    }
+    .tabs button.active { background: var(--accent); color: #08122b; border-color: var(--accent); font-weight: 600; }
+    .panel { display: none; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+    .panel.active { display: block; }
+    label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+    input[type=file], select, input[type=number] {
+      width: 100%; padding: 8px; background: #0d1024; color: var(--fg);
+      border: 1px solid var(--border); border-radius: 8px; font-size: 14px;
+    }
+    .row { display: flex; gap: 12px; }
+    .row > div { flex: 1; }
+    button.action {
+      margin-top: 14px; width: 100%; padding: 12px; border: none; border-radius: 8px;
+      background: var(--accent); color: #08122b; font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    button.action.secondary { background: var(--panel); color: var(--fg); border: 1px solid var(--border); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    canvas#qr { display: block; margin: 16px auto 0; background: #fff; border-radius: 8px; max-width: 100%; image-rendering: pixelated; }
+    video { width: 100%; max-height: 320px; border-radius: 8px; background: #000; margin-top: 12px; }
+    .stat { font-size: 13px; color: var(--muted); margin-top: 10px; }
+    .stat b { color: var(--fg); }
+    .bar { height: 10px; background: #0d1024; border-radius: 6px; overflow: hidden; margin-top: 8px; border: 1px solid var(--border); }
+    .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+    .result { margin-top: 14px; padding: 12px; border-radius: 8px; border: 1px solid var(--border); }
+    .result.ok { border-color: var(--ok); }
+    .result.bad { border-color: var(--bad); }
+    a.download { color: var(--accent); font-weight: 600; }
+    pre.log { background: #0d1024; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 12px; overflow: auto; max-height: 320px; white-space: pre-wrap; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    .warn { color: var(--bad); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Project Vision</h1>
+    <p>Transfer a file device-to-device with no network — through a stream of animated QR codes.</p>
+  </header>
+  <main>
+    <div class="tabs">
+      <button data-tab="send" class="active">Send</button>
+      <button data-tab="receive">Receive</button>
+      <button data-tab="test">Self-test</button>
+    </div>
+
+    <!-- SEND -->
+    <section id="send" class="panel active">
+      <label for="file">File to send (small files recommended, &lt; ~100 KB)</label>
+      <input type="file" id="file" />
+      <div class="row">
+        <div>
+          <label for="blockSize">Block size (bytes)</label>
+          <input type="number" id="blockSize" value="128" min="16" max="1024" />
+        </div>
+        <div>
+          <label for="ecc">Error correction</label>
+          <select id="ecc"><option>L</option><option selected>M</option><option>Q</option><option>H</option></select>
+        </div>
+        <div>
+          <label for="fps">Frames / sec</label>
+          <input type="number" id="fps" value="8" min="1" max="20" />
+        </div>
+      </div>
+      <button class="action" id="startSend">Start transmitting</button>
+      <button class="action secondary" id="stopSend" disabled>Stop</button>
+      <canvas id="qr" width="320" height="320"></canvas>
+      <div class="stat" id="sendStat"></div>
+      <div class="hint">Point the receiving device's camera at this screen. The stream loops forever, so it doesn't matter which frame the receiver starts on.</div>
+    </section>
+
+    <!-- RECEIVE -->
+    <section id="receive" class="panel">
+      <button class="action" id="startRecv">Start camera</button>
+      <button class="action secondary" id="stopRecv" disabled>Stop camera</button>
+      <video id="video" playsinline muted></video>
+      <div class="stat" id="recvStat">Idle.</div>
+      <div class="bar"><div id="recvBar"></div></div>
+      <div id="recvResult"></div>
+      <div class="hint" id="recvHint">Camera needs a secure context (HTTPS or localhost). See the README if the camera won't start.</div>
+    </section>
+
+    <!-- SELF-TEST -->
+    <section id="test" class="panel">
+      <p class="stat">Run the loopback tests — no camera or second device needed.</p>
+      <button class="action" id="runCodec">Run codec loopback (fast)</button>
+      <button class="action secondary" id="runOptical">Run optical loopback (renders + scans real QRs)</button>
+      <pre class="log" id="testLog">Ready.</pre>
+    </section>
+  </main>
+
+  <!-- Vendored libraries: classic scripts that attach globals (window.qrcode, window.jsQR). -->
+  <script src="vendor/qrcode-generator.js"></script>
+  <script src="vendor/jsQR.js"></script>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
