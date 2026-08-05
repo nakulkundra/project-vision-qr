@@ -6,7 +6,7 @@
 // index.html so the installed PWA opens offline. Bump CACHE_VERSION whenever
 // any precached file changes to force clients onto the new bundle.
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `project-vision-${CACHE_VERSION}`;
 
 // Paths are relative to this script's location (the app root), so they work

@@ -37,6 +37,26 @@ export function encodeBase45(bytes) {
 
 // Decode base45 string -> Uint8Array. Returns null on any malformed input
 // (fail closed — a garbled scan is simply dropped; the fountain layer recovers).
+// Decode a scanned QR payload into frame bytes, accepting BOTH wire formats:
+// base45/alphanumeric (current) and raw latin1 byte-mode (older senders). This
+// makes a sender/receiver version mismatch recoverable instead of a silent
+// "sees the QR but decodes nothing" failure. MAGIC/VERSION in protocol.js are
+// the discriminator: whichever interpretation yields a valid header wins.
+const _MAGIC = 0x51, _VERSION = 1;
+function looksLikeFrame(bytes) {
+  return !!bytes && bytes.length >= 5 && bytes[0] === _MAGIC && bytes[1] === _VERSION;
+}
+export function decodeScanned(str) {
+  if (str == null) return null;
+  const b45 = decodeBase45(str);
+  if (looksLikeFrame(b45)) return b45;
+  // Fall back to treating the string as raw latin1 bytes (legacy byte mode).
+  const raw = new Uint8Array(str.length);
+  for (let i = 0; i < str.length; i++) raw[i] = str.charCodeAt(i) & 0xff;
+  if (looksLikeFrame(raw)) return raw;
+  return b45 || null;
+}
+
 export function decodeBase45(str) {
   if (str == null) return null;
   const n = str.length;

@@ -5,16 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Project Vision — QR file transfer</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <meta name="theme-color" content="#0f1220" />
+  <meta name="theme-color" content="#06231f" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="QR Transfer" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <style>
+    /* Build v3 theme — deep teal. The background colour is deliberately
+       distinct per build so you can tell at a glance (on BOTH devices) that
+       you are running the latest deployed version. See #buildBadge. */
     :root {
-      --bg: #0f1220; --panel: #1a1e33; --fg: #e8eaf5;
-      --muted: #9aa3c7; --accent: #6ea8fe; --ok: #46d39a; --bad: #ff6b81;
-      --border: #2b3157;
+      --bg: #06231f; --panel: #0c332d; --fg: #eafff8;
+      --muted: #8fc7ba; --accent: #2fd7a2; --ok: #46d39a; --bad: #ff6b81;
+      --border: #14544a;
     }
     * { box-sizing: border-box; }
     body {
@@ -64,7 +67,7 @@
 <body>
   <header style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
     <div>
-      <h1>Project Vision</h1>
+      <h1>Project Vision <span id="buildBadge" style="font-size:12px; font-weight:600; background:var(--accent); color:#06231f; padding:2px 8px; border-radius:999px; vertical-align:middle;">BUILD v3 · teal</span></h1>
       <p>Transfer a file device-to-device with no network — through a stream of animated QR codes.</p>
       <p id="offlineStatus" class="stat" style="margin-top:6px; color:var(--muted);"></p>
     </div>

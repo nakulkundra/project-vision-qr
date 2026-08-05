@@ -7,7 +7,7 @@
 //
 // Both scanners read the same base45/alphanumeric frames (see transport.js).
 
-import { encodeBase45, decodeBase45 } from './transport.js';
+import { encodeBase45, decodeBase45, decodeScanned } from './transport.js';
 
 function getQrLib() {
   if (typeof window === 'undefined' || !window.qrcode) {
@@ -61,7 +61,7 @@ export function scanImageData(imageData) {
   const jsQR = getJsQR();
   const res = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
   if (!res || !res.data) return null;
-  return decodeBase45(res.data);
+  return decodeScanned(res.data);
 }
 
 // ---------------------------------------------------------------------------
@@ -112,7 +112,7 @@ export class Scanner {
       const out = [];
       for (const c of codes) {
         this.rawSeen++;
-        const bytes = decodeBase45(c.rawValue);
+        const bytes = decodeScanned(c.rawValue);
         if (bytes) { out.push(bytes); this.decoded++; }
       }
       // If native keeps detecting nothing decodable, don't get stuck — jsQR is
@@ -152,7 +152,7 @@ export class Scanner {
       this.rawSeen++;
       this._updateROI(res.location, rx, ry, w, h);
       this._miss = 0;
-      const bytes = decodeBase45(res.data);
+      const bytes = decodeScanned(res.data);
       if (bytes) { this.decoded++; return [bytes]; }
       return [];
     }
@@ -178,4 +178,4 @@ export class Scanner {
   }
 }
 
-export { encodeBase45, decodeBase45 };
+export { encodeBase45, decodeBase45, decodeScanned };
