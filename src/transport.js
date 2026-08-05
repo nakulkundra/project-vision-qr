@@ -19,20 +19,24 @@ const CHAR_TO_VAL = (() => {
 
 // Encode bytes -> base45 string.
 export function encodeBase45(bytes) {
-  let out = '';
+  const len = bytes.length;
+  // Each 2 bytes become 3 characters. A trailing byte becomes 2 characters.
+  const outLen = Math.floor(len / 2) * 3 + (len % 2 === 1 ? 2 : 0);
+  const out = new Array(outLen);
   let i = 0;
-  for (; i + 1 < bytes.length; i += 2) {
+  let j = 0;
+  for (; i + 1 < len; i += 2) {
     let n = bytes[i] * 256 + bytes[i + 1]; // 0..65535 -> exactly 3 symbols
-    out += ALPHABET[n % 45]; n = (n - (n % 45)) / 45;
-    out += ALPHABET[n % 45]; n = (n - (n % 45)) / 45;
-    out += ALPHABET[n % 45];
+    out[j++] = ALPHABET[n % 45]; n = (n - (n % 45)) / 45;
+    out[j++] = ALPHABET[n % 45]; n = (n - (n % 45)) / 45;
+    out[j++] = ALPHABET[n % 45];
   }
-  if (i < bytes.length) {
+  if (i < len) {
     let n = bytes[i]; // single trailing byte -> 2 symbols
-    out += ALPHABET[n % 45]; n = (n - (n % 45)) / 45;
-    out += ALPHABET[n % 45];
+    out[j++] = ALPHABET[n % 45]; n = (n - (n % 45)) / 45;
+    out[j++] = ALPHABET[n % 45];
   }
-  return out;
+  return out.join('');
 }
 
 // Decode base45 string -> Uint8Array. Returns null on any malformed input
