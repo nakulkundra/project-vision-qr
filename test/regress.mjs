@@ -2,6 +2,7 @@ import { decodeScanned, encodeBase45, isFrameShaped } from '../src/transport.js'
 import { buildMeta, buildData, parseFrame } from '../src/protocol.js';
 import { Receiver } from '../src/receiver.js';
 import { Sender } from '../src/sender.js';
+import { robustSolitonCDF } from '../src/fountain.js';
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra='') => { if (cond) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
@@ -71,5 +72,11 @@ async function restartScenario(feedUntilProgress) {
   ok('onDone fired exactly once', calls === 1, `calls=${calls} buffered=${bufferedCount}`);
   ok('buffered flush still verifies', !!(rx.result && rx.result.verified));
 }
+// ---- robustSolitonCDF edge case K=1 ----
+{
+  const cdf = robustSolitonCDF(1);
+  ok('robustSolitonCDF(1) returns [0, 1]', cdf.length === 2 && cdf[0] === 0 && cdf[1] === 1, `actual=[${cdf}]`);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
