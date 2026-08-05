@@ -1,5 +1,5 @@
 import { decodeScanned, encodeBase45, isFrameShaped } from '../src/transport.js';
-import { buildMeta, buildData, parseFrame } from '../src/protocol.js';
+import { buildMeta, buildData, parseFrame, splitIntoBlocks } from '../src/protocol.js';
 import { Receiver } from '../src/receiver.js';
 import { Sender } from '../src/sender.js';
 
@@ -71,5 +71,15 @@ async function restartScenario(feedUntilProgress) {
   ok('onDone fired exactly once', calls === 1, `calls=${calls} buffered=${bufferedCount}`);
   ok('buffered flush still verifies', !!(rx.result && rx.result.verified));
 }
+
+// ---- FIX 4: splitIntoBlocks with empty bytes ----
+{
+  const empty = new Uint8Array(0);
+  const blocks = splitIntoBlocks(empty, 64);
+  ok('empty bytes produces one block', blocks.length === 1, `length=${blocks.length}`);
+  ok('empty bytes block is zero-filled', blocks[0].every(b => b === 0), `not zero-filled`);
+  ok('empty bytes block has correct size', blocks[0].length === 64, `size=${blocks[0].length}`);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
