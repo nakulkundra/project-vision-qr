@@ -197,6 +197,48 @@ $('runOptical').addEventListener('click', async () => {
   }
 });
 
+// ============================== PWA / OFFLINE =================================
+// Register the service worker so the app shell is cached for offline use.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').then((reg) => {
+      const ready = reg.active || reg.waiting;
+      if (ready) markOfflineReady();
+      reg.addEventListener('updatefound', () => {
+        const sw = reg.installing;
+        if (sw) sw.addEventListener('statechange', () => { if (sw.state === 'activated') markOfflineReady(); });
+      });
+    }).catch(() => { /* offline caching unavailable; app still works online */ });
+  });
+}
+function markOfflineReady() {
+  const el = $('offlineStatus');
+  if (el) el.innerHTML = '✓ Ready to work offline';
+}
+
+// Installability: capture the prompt and expose an Install button.
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstall = e;
+  const btn = $('installBtn');
+  if (btn) btn.style.display = '';
+});
+$('installBtn')?.addEventListener('click', async () => {
+  if (!deferredInstall) return;
+  deferredInstall.prompt();
+  await deferredInstall.userChoice;
+  deferredInstall = null;
+  $('installBtn').style.display = 'none';
+});
+window.addEventListener('appinstalled', () => {
+  deferredInstall = null;
+  const btn = $('installBtn');
+  if (btn) btn.style.display = 'none';
+  const el = $('offlineStatus');
+  if (el) el.innerHTML = '✓ Installed · ready to work offline';
+});
+
 // --- small helpers ------------------------------------------------------------
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

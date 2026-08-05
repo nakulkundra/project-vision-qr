@@ -64,6 +64,26 @@ transmitting*. On the **receiver** device open the **Receive** tab, press *Start
 camera*, and point it at the sender's screen. Watch the progress bar; when it
 hits 100% and shows *SHA-256 verified*, download the file.
 
+## Install & offline (PWA)
+
+The app is a **Progressive Web App**: a web manifest makes it installable and a
+service worker (`service-worker.js`) precaches the entire app shell (HTML, all ES
+modules, vendored libraries, icons), so once loaded it runs with **no network at
+all**.
+
+- **Install:** open the site in Chrome/Edge (desktop or Android) and use the
+  **Install app** button in the header, or the browser's install icon in the
+  address bar. On iOS Safari use *Share → Add to Home Screen*.
+- **Offline:** after the first load, the page works fully offline — you can put
+  the device in airplane mode and still send/receive. The header shows
+  *"✓ Ready to work offline"* once the service worker has cached everything.
+- Bump `CACHE_VERSION` in `service-worker.js` whenever a shell file changes to
+  push the new bundle to already-installed clients.
+
+> Note: a service worker requires a **secure context** (HTTPS or `localhost`) —
+> the same requirement as the camera, so nothing extra is needed beyond hosting
+> the app over HTTPS (e.g. GitHub Pages).
+
 ## Verifying without hardware
 
 ```bash

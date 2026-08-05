@@ -4,6 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Project Vision — QR file transfer</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#0f1220" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="QR Transfer" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <style>
     :root {
       --bg: #0f1220; --panel: #1a1e33; --fg: #e8eaf5;
@@ -56,9 +62,13 @@
   </style>
 </head>
 <body>
-  <header>
-    <h1>Project Vision</h1>
-    <p>Transfer a file device-to-device with no network — through a stream of animated QR codes.</p>
+  <header style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+    <div>
+      <h1>Project Vision</h1>
+      <p>Transfer a file device-to-device with no network — through a stream of animated QR codes.</p>
+      <p id="offlineStatus" class="stat" style="margin-top:6px; color:var(--muted);"></p>
+    </div>
+    <button id="installBtn" class="action" style="display:none; width:auto; margin:0; white-space:nowrap;">Install app</button>
   </header>
   <main>
     <div class="tabs">
