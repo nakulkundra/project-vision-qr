@@ -4,7 +4,7 @@
 // and main.js are fetched separately, so a stale cache can pair fresh HTML with
 // stale JS — which looks like "the buttons are visible but do nothing". When the
 // stamps disagree we say so and offer a one-tap hard refresh.
-export const BUILD = 'v6';
+export const BUILD = 'v7';
 
 import { Sender } from './sender.js';
 import { Receiver } from './receiver.js';
@@ -117,6 +117,7 @@ let scanner = null;
 let scanFps = 0, _scanFrames = 0, _scanFpsAt = 0;
 let _rxStart = 0; // timestamp of first progress event, for throughput/ETA
 let camInfo = '';  // actual granted camera resolution/fps, for diagnostics
+let _scanArmedAt = 0, _scanWatchdog = null; // scan-loop stall watchdog
 
 async function startRecv() {
   // Decide the decoder FIRST, because it dictates the affordable resolution.
@@ -163,6 +164,7 @@ async function startRecv() {
   $('recvStat').textContent =
     `Scanning (${scanner.mode === 'native' ? 'native BarcodeDetector' : 'jsQR'})… point at the sender screen.`;
   scanLoop();
+  startScanWatchdog();
 }
 
 // Schedule the next scan pass. requestVideoFrameCallback fires once per NEW
@@ -170,11 +172,27 @@ async function startRecv() {
 // never miss one; requestAnimationFrame (display refresh) is the fallback.
 function scheduleScan(video) {
   if (!scanning) return;
+  _scanArmedAt = performance.now();
   if (typeof video.requestVideoFrameCallback === 'function') {
-    video.requestVideoFrameCallback(() => scanLoop());
+    video.requestVideoFrameCallback(() => { _scanArmedAt = 0; scanLoop(); });
   } else {
-    requestAnimationFrame(() => scanLoop());
+    requestAnimationFrame(() => { _scanArmedAt = 0; scanLoop(); });
   }
+}
+
+// Watchdog. requestVideoFrameCallback only fires when the camera produces a new
+// frame, so if the track stalls (backgrounded tab, device hiccup) the loop is
+// never re-armed and scanning dies silently with the UI still saying "Scanning".
+// If nothing has fired for a while, kick it with a timer instead.
+function startScanWatchdog() {
+  clearInterval(_scanWatchdog);
+  _scanWatchdog = setInterval(() => {
+    if (!scanning) { clearInterval(_scanWatchdog); _scanWatchdog = null; return; }
+    if (_scanArmedAt && performance.now() - _scanArmedAt > 1500) {
+      _scanArmedAt = 0;
+      scanLoop(); // re-enter; scheduleScan will re-arm
+    }
+  }, 1000);
 }
 
 async function scanLoop() {
@@ -224,12 +242,20 @@ function onProgress(p) {
       `Receiving <b>${escapeHtml(p.filename || '')}</b> · ` +
       `recovered <b>${p.recovered}/${p.K}</b> blocks (${pct}%) · ${p.packetsSeen} packets${rate}${thru}${eta}`;
   } else {
-    $('recvStat').innerHTML = `Waiting for a META frame… (${p.packetsSeen} data packets buffered)`;
+    $('recvStat').innerHTML =
+      `Waiting for the sender's info frame… ${p.buffered || 0} data packets buffered ` +
+      `<span class="hint">(keep pointing at the screen — it is sent every couple of seconds)</span>`;
+  }
+  // The sender restarted (e.g. a preset was tapped) after we had real progress.
+  if (p.sessionChanged) {
+    $('recvStat').innerHTML +=
+      ` · <span class="warn">sender restarted mid-transfer — switching to the new one…</span>`;
   }
 }
 
 function onDone(result) {
   scanning = false;
+  clearScanWatchdog();
   stopStream();
   $('startRecv').disabled = false;
   $('stopRecv').disabled = true;
@@ -246,12 +272,18 @@ function onDone(result) {
   $('recvStat').textContent = 'Transfer complete.';
 }
 
+function clearScanWatchdog() {
+  if (_scanWatchdog) { clearInterval(_scanWatchdog); _scanWatchdog = null; }
+  _scanArmedAt = 0;
+}
+
 function stopStream() {
   if (stream) stream.getTracks().forEach((t) => t.stop());
   stream = null;
 }
 function stopRecv() {
   scanning = false;
+  clearScanWatchdog();
   stopStream();
   $('startRecv').disabled = false;
   $('stopRecv').disabled = true;
@@ -331,6 +363,14 @@ $('forceUpdate')?.addEventListener('click', hardRefresh);
 // ============================== PWA / OFFLINE =================================
 // Register the service worker so the app shell is cached for offline use.
 if ('serviceWorker' in navigator) {
+  // When a new service worker takes control, reload once so the page is not
+  // left pairing fresh HTML with stale cached modules.
+  let _swReloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (_swReloaded) return;
+    _swReloaded = true;
+    location.reload();
+  });
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('service-worker.js').then((reg) => {
       const ready = reg.active || reg.waiting;

@@ -194,9 +194,13 @@ export class Scanner {
       // Only count scans that actually saw a code: an empty `codes` array just
       // means the camera is not aimed at a QR yet, and counting those would
       // abandon the fast native path within a fraction of a second of startup.
+      //
+      // The trigger is a ROLLING run of detected-but-unusable codes, NOT
+      // "decoded === 0" — gating on a lifetime counter meant a single lucky
+      // decode disabled the fallback permanently for the rest of the session.
       if (out.length) {
         this._sinceDecode = 0;
-      } else if (codes.length > 0 && ++this._sinceDecode >= 15 && this.decoded === 0) {
+      } else if (codes.length > 0 && ++this._sinceDecode >= 20) {
         this._fallback();
         return this._scanJsQR(video);
       }

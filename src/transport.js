@@ -54,7 +54,20 @@ export function decodeScanned(str) {
   const raw = new Uint8Array(str.length);
   for (let i = 0; i < str.length; i++) raw[i] = str.charCodeAt(i) & 0xff;
   if (looksLikeFrame(raw)) return raw;
-  return b45 || null;
+  // FAIL CLOSED. Returning a merely-base45-decodable buffer here was a real bug:
+  // any in-alphabet string (an unrelated QR, or a scanner that mangles a
+  // character) produced a truthy result, so the scanner counted it as "decoded",
+  // which both inflated the success counter and permanently disabled the
+  // native->jsQR fallback (its guard was `decoded === 0`). The receiver then got
+  // nothing but unparseable frames: "QRs seen 1000 - decoded 1000", zero
+  // packets, stuck on "Scanning" forever.
+  return null;
+}
+
+// True if `bytes` carries our magic + version. Exported so callers can validate
+// without duplicating the constants.
+export function isFrameShaped(bytes) {
+  return looksLikeFrame(bytes);
 }
 
 export function decodeBase45(str) {
