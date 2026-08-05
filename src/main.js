@@ -4,7 +4,7 @@
 // and main.js are fetched separately, so a stale cache can pair fresh HTML with
 // stale JS — which looks like "the buttons are visible but do nothing". When the
 // stamps disagree we say so and offer a one-tap hard refresh.
-export const BUILD = 'v5';
+export const BUILD = 'v6';
 
 import { Sender } from './sender.js';
 import { Receiver } from './receiver.js';
@@ -34,9 +34,9 @@ async function startSend() {
   const file = fileInput.files[0];
   const bytes = new Uint8Array(await file.arrayBuffer());
 
-  const blockSize = Math.max(16, Math.min(2048, +$('blockSize').value || 256));
+  const blockSize = Math.max(16, Math.min(2048, +$('blockSize').value || 128));
   const ecc = $('ecc').value;
-  const fps = Math.max(1, Math.min(30, +$('fps').value || 12));
+  const fps = Math.max(1, Math.min(30, +$('fps').value || 8));
 
   const sender = await new Sender(bytes, file.name, { blockSize }).init();
   frameNo = 0;
@@ -57,7 +57,12 @@ async function startSend() {
   const perFrame = blockSize + 9; // 5-byte header + 4-byte seed + payload
   // Lock one QR version for the whole session so the code never changes size
   // mid-stream (see buildQR). Sized for the largest frame — the DATA frames.
-  const fixedVersion = versionForPayload(perFrame, ecc);
+  let fixedVersion = versionForPayload(perFrame, ecc);
+  // QR version 23 at ECC L is not decodable by the vendored jsQR (verified by
+  // sweeping versions 5-40 at L and M: L fails only at 23, for every mask and
+  // at 2-5px/module). Nudge to the next version so the config can never be a
+  // silent 100% failure on the software-decode path (which is every iPhone).
+  if (fixedVersion === 23 && ecc === 'L') fixedVersion = 24;
   const dataModules = 4 * fixedVersion + 17;
   const theoretical = ((perFrame * fps) / 1024).toFixed(1);
   const pxPerModule = (maxPx / (dataModules + 8)).toFixed(1);
@@ -111,15 +116,23 @@ let receiver = null;
 let scanner = null;
 let scanFps = 0, _scanFrames = 0, _scanFpsAt = 0;
 let _rxStart = 0; // timestamp of first progress event, for throughput/ETA
+let camInfo = '';  // actual granted camera resolution/fps, for diagnostics
 
 async function startRecv() {
+  // Decide the decoder FIRST, because it dictates the affordable resolution.
+  // The native BarcodeDetector is hardware-accelerated, so a 1080p feed is
+  // nearly free and buys resolution for denser (higher-payload) codes. jsQR is
+  // pure JS and its cost scales with pixels: a full 1080p frame measured ~615ms
+  // per decode (~2 scans/sec), so the software path gets 720p instead. Asking
+  // for 1080p on the jsQR path was a real throughput regression.
+  scanner = await new Scanner().init();
+  const wantHiRes = scanner.mode === 'native';
   try {
-    // Higher resolution resolves denser QR codes (which is what lets us raise
-    // the payload per frame); a high frameRate raises the scan ceiling.
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: 'environment',
-        width: { ideal: 1920 }, height: { ideal: 1080 },
+        width: { ideal: wantHiRes ? 1920 : 1280 },
+        height: { ideal: wantHiRes ? 1080 : 720 },
         frameRate: { ideal: 30 },
       },
     });
@@ -133,8 +146,15 @@ async function startRecv() {
   video.srcObject = stream;
   await video.play();
 
+  // Report what the camera actually granted. Requested constraints are only a
+  // hint — a feed can silently come back at 15fps or a lower resolution, which
+  // caps throughput no matter what the sender does.
+  try {
+    const s = stream.getVideoTracks()[0]?.getSettings?.() || {};
+    camInfo = `${s.width || '?'}×${s.height || '?'}@${Math.round(s.frameRate || 0) || '?'}fps`;
+  } catch { camInfo = ''; }
+
   receiver = new Receiver(onProgress, onDone);
-  scanner = await new Scanner().init();
   scanning = true;
   _scanFrames = 0; _scanFpsAt = performance.now(); scanFps = 0; _rxStart = 0;
   $('startRecv').disabled = true;
@@ -176,7 +196,8 @@ async function scanLoop() {
       if (!receiver?.meta) {
         const mode = scanner.autoFellBack ? 'jsQR (auto)' : (scanner.mode === 'native' ? 'native' : 'jsQR');
         $('recvStat').innerHTML =
-          `Scanning (${mode}) · ~${scanFps}/s · QRs seen <b>${scanner.rawSeen}</b> · decoded <b>${scanner.decoded}</b>` +
+          `Scanning (<b>${mode}</b>) · cam ${camInfo} · ~${scanFps}/s · ` +
+          `QRs seen <b>${scanner.rawSeen}</b> · decoded <b>${scanner.decoded}</b> · skipped ${scanner.skipped}` +
           (scanner.rawSeen > 0 && scanner.decoded === 0
             ? ' <span class="warn">— seeing QRs but can\'t decode; hold steady / move closer</span>' : '');
       }

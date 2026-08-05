@@ -64,10 +64,10 @@
     .warn { color: var(--bad); }
   </style>
 </head>
-<body data-build="v5">
+<body data-build="v6">
   <header style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
     <div>
-      <h1>Project Vision <span id="buildBadge" style="font-size:12px; font-weight:600; background:var(--accent); color:#06231f; padding:2px 8px; border-radius:999px; vertical-align:middle;">BUILD v5 · steady</span></h1>
+      <h1>Project Vision <span id="buildBadge" style="font-size:12px; font-weight:600; background:var(--accent); color:#06231f; padding:2px 8px; border-radius:999px; vertical-align:middle;">BUILD v6 · fast</span></h1>
       <p>Transfer a file device-to-device with no network — through a stream of animated QR codes.</p>
       <p id="offlineStatus" class="stat" style="margin-top:6px; color:var(--muted);"></p>
     </div>
@@ -90,20 +90,20 @@
       <div class="row">
         <div>
           <label for="blockSize">Block size (bytes)</label>
-          <input type="number" id="blockSize" value="256" min="16" max="2048" />
+          <input type="number" id="blockSize" value="128" min="16" max="2048" />
         </div>
         <div>
           <label for="ecc">Error correction</label>
-          <select id="ecc"><option selected>L</option><option>M</option><option>Q</option><option>H</option></select>
+          <select id="ecc"><option>L</option><option selected>M</option><option>Q</option><option>H</option></select>
         </div>
         <div>
           <label for="fps">Frames / sec</label>
-          <input type="number" id="fps" value="12" min="1" max="30" />
+          <input type="number" id="fps" value="8" min="1" max="30" />
         </div>
       </div>
       <div class="row" style="margin-top:10px;">
-        <button class="action secondary" id="presetSafe" style="margin-top:0;">Reliable (128 · M · 8)</button>
-        <button class="action secondary" id="presetTurbo" style="margin-top:0;">Turbo (512 · L · 15)</button>
+        <button class="action secondary" id="presetSafe" style="margin-top:0;">Reliable (any phone)</button>
+        <button class="action secondary" id="presetTurbo" style="margin-top:0;">Turbo (needs hardware scan)</button>
       </div>
       <button class="action" id="startSend">Start transmitting</button>
       <button class="action secondary" id="stopSend" disabled>Stop</button>

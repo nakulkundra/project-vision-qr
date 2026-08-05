@@ -61,8 +61,12 @@ export class Receiver {
 
   _feed(frame) {
     this.packetsSeen++;
-    this.decoder.addPacket(frame.seed, frame.payload);
-    this._emit();
+    // addPacket returns false for a duplicate seed (already-seen packet). Only
+    // repaint the UI when something actually changed: emitting on every
+    // duplicate rewrites innerHTML and restarts a CSS transition tens of times
+    // a second, on the same thread that has to decode the next camera frame.
+    const advanced = this.decoder.addPacket(frame.seed, frame.payload);
+    if (advanced) this._emit();
     if (this.decoder.complete) {
       this._finish();
       return true;
