@@ -32,24 +32,7 @@ document.querySelectorAll('.tabs button').forEach((btn) => {
 let sendTimer = null;
 let frameNo = 0;
 
-async function startSend() {
-  const fileInput = $('file');
-  if (!fileInput.files.length) { alert('Choose a file first.'); return; }
-  const file = fileInput.files[0];
-  const bytes = new Uint8Array(await file.arrayBuffer());
-
-  const blockSize = Math.max(16, Math.min(2048, +$('blockSize').value || 128));
-  const ecc = $('ecc').value;
-  const fps = Math.max(1, Math.min(30, +$('fps').value || 8));
-
-  const sender = await new Sender(bytes, file.name, { blockSize }).init();
-  frameNo = 0;
-  const baseStat =
-    `File <b>${escapeHtml(file.name)}</b> · ${bytes.length} bytes · ` +
-    `K=<b>${sender.K}</b> blocks · session <b>${sender.sessionId.toString(16).padStart(4, '0')}</b> · ` +
-    `SHA-256 <b>${toHex(sender.hash).slice(0, 12)}…</b>`;
-
-  const canvas = $('qr');
+function calculateQRConfig(canvas, blockSize, ecc, fps) {
   // Use the full available width — bigger modules on screen are the single
   // biggest factor in whether a phone can decode a dense QR.
   // Measure the PANEL, not canvas.parentElement: the parent is the white
@@ -77,14 +60,42 @@ async function startSend() {
   const theoretical = ((perFrame * fps) / 1024).toFixed(1);
   const pxPerModule = (maxPx / (dataModules + 8)).toFixed(1);
   const dense = dataModules >= 100 || pxPerModule < 4;
+
+  return { maxPx, fixedVersion, dataModules, theoretical, pxPerModule, dense };
+}
+
+function updateSendStatUI(sender, fileName, fileBytesLength, config) {
+  const baseStat =
+    `File <b>${escapeHtml(fileName)}</b> · ${fileBytesLength} bytes · ` +
+    `K=<b>${sender.K}</b> blocks · session <b>${sender.sessionId.toString(16).padStart(4, '0')}</b> · ` +
+    `SHA-256 <b>${toHex(sender.hash).slice(0, 12)}…</b>`;
+
   const statLine = baseStat +
-    ` · QR <b>${dataModules}×${dataModules}</b> (${pxPerModule}px/module) · ~<b>${theoretical} KB/s</b> ceiling` +
-    (dense ? ` · <span class="warn">very dense — if the receiver can't read it, tap "Reliable" or lower the block size</span>` : '');
+    ` · QR <b>${config.dataModules}×${config.dataModules}</b> (${config.pxPerModule}px/module) · ~<b>${config.theoretical} KB/s</b> ceiling` +
+    (config.dense ? ` · <span class="warn">very dense — if the receiver can't read it, tap "Reliable" or lower the block size</span>` : '');
   $('sendStat').innerHTML = statLine;
+}
+
+async function startSend() {
+  const fileInput = $('file');
+  if (!fileInput.files.length) { alert('Choose a file first.'); return; }
+  const file = fileInput.files[0];
+  const bytes = new Uint8Array(await file.arrayBuffer());
+
+  const blockSize = Math.max(16, Math.min(2048, +$('blockSize').value || 128));
+  const ecc = $('ecc').value;
+  const fps = Math.max(1, Math.min(30, +$('fps').value || 8));
+
+  const sender = await new Sender(bytes, file.name, { blockSize }).init();
+  frameNo = 0;
+
+  const canvas = $('qr');
+  const qrConfig = calculateQRConfig(canvas, blockSize, ecc, fps);
+  updateSendStatUI(sender, file.name, bytes.length, qrConfig);
 
   const tick = () => {
     const frame = sender.nextFrame();
-    renderToCanvas(canvas, frame, { ecc, maxPx, version: fixedVersion });
+    renderToCanvas(canvas, frame, { ecc, maxPx: qrConfig.maxPx, version: qrConfig.fixedVersion });
     frameNo++;
     const kind = frame[4] === 1 ? 'META' : 'DATA';
     $('sendStat').dataset.frame = frameNo;
