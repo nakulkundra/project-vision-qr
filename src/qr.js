@@ -79,6 +79,11 @@ export class Scanner {
     this._canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
     this.roi = null;           // { x, y, w, h } in video pixels, or null = full
     this._miss = 0;
+    // Diagnostics + native->jsQR auto-fallback bookkeeping.
+    this.rawSeen = 0;          // QR codes the scanner physically detected
+    this.decoded = 0;          // of those, ones that base45-decoded to a frame
+    this._sinceDecode = 0;     // native scans in a row that produced no frame
+    this.autoFellBack = false; // flipped true if we gave up on native
   }
 
   async init() {
@@ -96,19 +101,37 @@ export class Scanner {
 
   async scanVideo(video) {
     if (this.mode === 'native') {
+      let codes;
       try {
-        const codes = await this.detector.detect(video);
-        const out = [];
-        for (const c of codes) {
-          const bytes = decodeBase45(c.rawValue);
-          if (bytes) out.push(bytes);
-        }
-        return out;
+        codes = await this.detector.detect(video);
       } catch {
-        this.mode = 'jsqr'; // some devices throw intermittently — degrade once
+        // detect() unavailable/broken on this device — switch to jsQR for good.
+        this._fallback();
+        return this._scanJsQR(video);
       }
+      const out = [];
+      for (const c of codes) {
+        this.rawSeen++;
+        const bytes = decodeBase45(c.rawValue);
+        if (bytes) { out.push(bytes); this.decoded++; }
+      }
+      // If native keeps detecting nothing decodable, don't get stuck — jsQR is
+      // proven to read these frames, so hand off to it after a short grace.
+      if (out.length) {
+        this._sinceDecode = 0;
+      } else if (++this._sinceDecode >= 15 && this.decoded === 0) {
+        this._fallback();
+        return this._scanJsQR(video);
+      }
+      return out;
     }
     return this._scanJsQR(video);
+  }
+
+  _fallback() {
+    this.mode = 'jsqr';
+    this.autoFellBack = true;
+    this.roi = null;
   }
 
   _scanJsQR(video) {
@@ -126,10 +149,12 @@ export class Scanner {
     const jsQR = getJsQR();
     const res = jsQR(img.data, rw, rh, { inversionAttempts: 'dontInvert' });
     if (res && res.data) {
+      this.rawSeen++;
       this._updateROI(res.location, rx, ry, w, h);
       this._miss = 0;
       const bytes = decodeBase45(res.data);
-      return bytes ? [bytes] : [];
+      if (bytes) { this.decoded++; return [bytes]; }
+      return [];
     }
     if (++this._miss > 3) this.roi = null; // lost it — widen back to full frame
     return [];

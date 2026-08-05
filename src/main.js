@@ -112,6 +112,15 @@ async function scanLoop() {
     if (now - _scanFpsAt >= 500) {
       scanFps = Math.round((_scanFrames * 1000) / (now - _scanFpsAt));
       _scanFrames = 0; _scanFpsAt = now;
+      // Live diagnostics before a transfer locks on — shows whether the camera
+      // is detecting QRs at all, and whether they are decoding.
+      if (!receiver?.meta) {
+        const mode = scanner.autoFellBack ? 'jsQR (auto)' : (scanner.mode === 'native' ? 'native' : 'jsQR');
+        $('recvStat').innerHTML =
+          `Scanning (${mode}) · ~${scanFps}/s · QRs seen <b>${scanner.rawSeen}</b> · decoded <b>${scanner.decoded}</b>` +
+          (scanner.rawSeen > 0 && scanner.decoded === 0
+            ? ' <span class="warn">— seeing QRs but can\'t decode; hold steady / move closer</span>' : '');
+      }
     }
   }
   if (scanning) requestAnimationFrame(scanLoop);
