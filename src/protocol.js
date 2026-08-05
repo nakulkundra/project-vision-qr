@@ -20,9 +20,7 @@ const SHA_LEN = 32;
 // jsQR returns binaryData as an array of byte values, so a Latin-1 string is a
 // lossless carrier for raw bytes through the optical channel.
 export function bytesToLatin1(bytes) {
-  let s = '';
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-  return s;
+  return Array.from(bytes, x => String.fromCharCode(x)).join('');
 }
 export function latin1ToBytes(str) {
   const out = new Uint8Array(str.length);
