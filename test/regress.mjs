@@ -1,10 +1,22 @@
 import { decodeScanned, encodeBase45, isFrameShaped } from '../src/transport.js';
-import { buildMeta, buildData, parseFrame } from '../src/protocol.js';
+import { buildMeta, buildData, parseFrame, latin1ToBytes } from '../src/protocol.js';
 import { Receiver } from '../src/receiver.js';
 import { Sender } from '../src/sender.js';
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra='') => { if (cond) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
+
+// ---- latin1ToBytes ----
+{
+  const empty = latin1ToBytes('');
+  ok('latin1ToBytes: empty string', empty instanceof Uint8Array && empty.length === 0);
+
+  const normal = latin1ToBytes('Hello');
+  ok('latin1ToBytes: normal string', normal.length === 5 && normal[0] === 72 && normal[1] === 101 && normal[2] === 108 && normal[3] === 108 && normal[4] === 111);
+
+  const truncated = latin1ToBytes('a' + String.fromCharCode(256) + 'b');
+  ok('latin1ToBytes: truncates >255', truncated.length === 3 && truncated[0] === 97 && truncated[1] === 0 && truncated[2] === 98);
+}
 
 // ---- FIX 1: decodeScanned must fail closed on non-frame garbage ----
 const garbage = 'ABCDEF0123456789';            // in-alphabet, length%3 != 1
