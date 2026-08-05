@@ -1,8 +1,14 @@
 // main.js — UI wiring for Send / Receive / Self-test.
+//
+// BUILD must match the data-build attribute on <body> in index.html. index.html
+// and main.js are fetched separately, so a stale cache can pair fresh HTML with
+// stale JS — which looks like "the buttons are visible but do nothing". When the
+// stamps disagree we say so and offer a one-tap hard refresh.
+export const BUILD = 'v5';
 
 import { Sender } from './sender.js';
 import { Receiver } from './receiver.js';
-import { renderToCanvas, buildQR, Scanner } from './qr.js';
+import { renderToCanvas, versionForPayload, Scanner } from './qr.js';
 import { toHex } from './protocol.js';
 import { codecLoopback, opticalLoopback } from './selftest.js';
 
@@ -49,7 +55,10 @@ async function startSend() {
   // direction, since it is the dense DATA frames a camera struggles with).
   // Empirically: 109 modules failed to decode at ~5px/module; 81 decoded fine.
   const perFrame = blockSize + 9; // 5-byte header + 4-byte seed + payload
-  const dataModules = buildQR(new Uint8Array(perFrame), ecc).getModuleCount();
+  // Lock one QR version for the whole session so the code never changes size
+  // mid-stream (see buildQR). Sized for the largest frame — the DATA frames.
+  const fixedVersion = versionForPayload(perFrame, ecc);
+  const dataModules = 4 * fixedVersion + 17;
   const theoretical = ((perFrame * fps) / 1024).toFixed(1);
   const pxPerModule = (maxPx / (dataModules + 8)).toFixed(1);
   const dense = dataModules >= 100 || pxPerModule < 4;
@@ -60,7 +69,7 @@ async function startSend() {
 
   const tick = () => {
     const frame = sender.nextFrame();
-    renderToCanvas(canvas, frame, { ecc, maxPx });
+    renderToCanvas(canvas, frame, { ecc, maxPx, version: fixedVersion });
     frameNo++;
     const kind = frame[4] === 1 ? 'META' : 'DATA';
     $('sendStat').dataset.frame = frameNo;
@@ -264,6 +273,39 @@ $('runOptical').addEventListener('click', async () => {
     logLine('ERROR: ' + e.message);
   }
 });
+
+// ============================== BUILD INTEGRITY ===============================
+// Nuke every cache + service worker and reload from the network. This is the
+// escape hatch when an installed PWA is stuck on stale code.
+async function hardRefresh() {
+  try {
+    const regs = await navigator.serviceWorker?.getRegistrations?.() || [];
+    await Promise.all(regs.map((r) => r.unregister()));
+  } catch { /* ignore */ }
+  try {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((k) => caches.delete(k)));
+  } catch { /* ignore */ }
+  location.replace(location.pathname + '?fresh=' + Date.now());
+}
+$('forceUpdate')?.addEventListener('click', hardRefresh);
+
+(function checkBuild() {
+  const htmlBuild = document.body.dataset.build;
+  if (htmlBuild && htmlBuild !== BUILD) {
+    const el = $('offlineStatus');
+    if (el) {
+      el.innerHTML =
+        `<span class="warn">Mixed build: page ${escapeHtml(htmlBuild)} but script ${BUILD} — ` +
+        `some controls may not work.</span> `;
+      const b = document.createElement('button');
+      b.textContent = 'Fix now';
+      b.style.cssText = 'margin-left:6px;padding:2px 8px;border-radius:6px;border:1px solid var(--border);background:var(--accent);color:#04211c;font-weight:600;cursor:pointer;';
+      b.addEventListener('click', hardRefresh);
+      el.appendChild(b);
+    }
+  }
+})();
 
 // ============================== PWA / OFFLINE =================================
 // Register the service worker so the app shell is cached for offline use.

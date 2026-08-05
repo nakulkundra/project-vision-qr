@@ -23,12 +23,28 @@ function getJsQR() {
 }
 
 // Build a QR model for the given frame bytes (base45 + Alphanumeric mode).
-export function buildQR(bytes, ecc = 'M') {
+// version: 0 => auto-pick the smallest that fits; >=1 => force that QR version.
+// Forcing a version keeps every frame the SAME physical size, which matters a
+// lot: a QR that changes size between frames makes the receiving camera re-hunt
+// focus and exposure and invalidates scan-region tracking, costing frames.
+export function buildQR(bytes, ecc = 'M', version = 0) {
   const qrcode = getQrLib();
-  const qr = qrcode(0, ecc); // 0 => auto-pick the smallest version that fits
+  const qr = qrcode(version, ecc);
   qr.addData(encodeBase45(bytes), 'Alphanumeric');
   qr.make();
   return qr;
+}
+
+// QR version <-> module count: modules = 4 * version + 17.
+export function versionFromModules(moduleCount) {
+  return Math.round((moduleCount - 17) / 4);
+}
+
+// The QR version needed to carry `payloadBytes` at `ecc`. Use this once up front
+// so every frame (including the smaller META frames) renders at one fixed size.
+export function versionForPayload(payloadBytes, ecc = 'M') {
+  const probe = buildQR(new Uint8Array(payloadBytes), ecc, 0);
+  return versionFromModules(probe.getModuleCount());
 }
 
 // Scratch canvas for one-pixel-per-module rendering, reused across frames.
@@ -41,8 +57,8 @@ let _tiny = null;
 // disabled. The naive approach issues one fillRect per dark module — 1000-2000+
 // calls per frame for a mid-size QR — which caps the achievable frame rate. This
 // version is O(1) canvas calls and produces pixel-identical crisp output.
-export function renderToCanvas(canvas, bytes, { ecc = 'M', maxPx = 512, margin = 4 } = {}) {
-  const qr = buildQR(bytes, ecc);
+export function renderToCanvas(canvas, bytes, { ecc = 'M', maxPx = 512, margin = 4, version = 0 } = {}) {
+  const qr = buildQR(bytes, ecc, version);
   const count = qr.getModuleCount();
   const total = count + margin * 2;
   const moduleSize = Math.max(1, Math.floor(maxPx / total));

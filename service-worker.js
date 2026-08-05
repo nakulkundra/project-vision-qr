@@ -2,11 +2,11 @@
 //
 // Precaches every file the app needs (HTML, all ES modules, vendored libs,
 // icons, manifest) so the whole thing runs with no network. Strategy is
-// cache-first with a network fallback; navigations fall back to the cached
-// index.html so the installed PWA opens offline. Bump CACHE_VERSION whenever
-// any precached file changes to force clients onto the new bundle.
+// NETWORK-FIRST with a cache fallback, so a device with any connectivity always
+// runs current code while the cache still makes the app work fully offline.
+// Bump CACHE_VERSION whenever any precached file changes.
 
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `project-vision-${CACHE_VERSION}`;
 
 // Paths are relative to this script's location (the app root), so they work
