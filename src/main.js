@@ -34,7 +34,12 @@ let frameNo = 0;
 
 async function startSend() {
   const fileInput = $('file');
-  if (!fileInput.files.length) { alert('Choose a file first.'); return; }
+  const fileError = $('fileError');
+  if (!fileInput.files.length) {
+    fileError.textContent = 'Please choose a file to send.';
+    fileInput.setAttribute('aria-invalid', 'true');
+    return;
+  }
   const file = fileInput.files[0];
   const bytes = new Uint8Array(await file.arrayBuffer());
 
@@ -106,6 +111,10 @@ function stopSend() {
 
 $('startSend').addEventListener('click', () => startSend().catch((e) => alert(e.message)));
 $('stopSend').addEventListener('click', stopSend);
+$('file').addEventListener('change', () => {
+  $('fileError').textContent = '';
+  $('file').removeAttribute('aria-invalid');
+});
 
 // One-tap presets. Turbo trades per-frame QR error correction for payload — the
 // fountain code already recovers whole dropped frames, so the ECC redundancy is
