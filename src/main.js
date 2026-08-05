@@ -4,7 +4,7 @@
 // and main.js are fetched separately, so a stale cache can pair fresh HTML with
 // stale JS — which looks like "the buttons are visible but do nothing". When the
 // stamps disagree we say so and offer a one-tap hard refresh.
-export const BUILD = 'v7';
+export const BUILD = 'v8';
 
 import { Sender } from './sender.js';
 import { Receiver } from './receiver.js';
@@ -17,9 +17,13 @@ const $ = (id) => document.getElementById(id);
 // --- tab switching ------------------------------------------------------------
 document.querySelectorAll('.tabs button').forEach((btn) => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.tabs button').forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('.tabs button').forEach((b) => {
+      b.classList.remove('active');
+      b.setAttribute('aria-selected', 'false');
+    });
     document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
     btn.classList.add('active');
+    btn.setAttribute('aria-selected', 'true');
     $(btn.dataset.tab).classList.add('active');
   });
 });
@@ -48,7 +52,13 @@ async function startSend() {
   const canvas = $('qr');
   // Use the full available width — bigger modules on screen are the single
   // biggest factor in whether a phone can decode a dense QR.
-  const maxPx = Math.min(canvas.parentElement.clientWidth, 640);
+  // Measure the PANEL, not canvas.parentElement: the parent is the white
+  // .qr-plate, which is width:fit-content and therefore sized BY the canvas —
+  // measuring it would be circular and collapse the code to a few pixels.
+  const host = canvas.closest('.panel') || canvas.parentElement;
+  const PANEL_PAD = 32, PLATE_PAD = 24; // horizontal padding either side of each
+  const avail = host.clientWidth - PANEL_PAD - PLATE_PAD;
+  const maxPx = Math.min(Math.max(220, avail), 640);
 
   // Density guidance. Measure a representative DATA frame, not the first frame
   // (which is a small META frame and would under-report density — the unsafe
@@ -100,14 +110,25 @@ $('stopSend').addEventListener('click', stopSend);
 // One-tap presets. Turbo trades per-frame QR error correction for payload — the
 // fountain code already recovers whole dropped frames, so the ECC redundancy is
 // largely duplicated work. Reliable is the fallback for poor light/shaky hands.
-function applyPreset(blockSize, ecc, fps) {
+function applyPreset(blockSize, ecc, fps, activeId) {
   $('blockSize').value = String(blockSize);
   $('ecc').value = ecc;
   $('fps').value = String(fps);
+  // Reflect which preset is selected (drives the segmented-control styling).
+  for (const id of ['presetSafe', 'presetTurbo']) {
+    $(id)?.setAttribute('aria-pressed', String(id === activeId));
+  }
   if (sendTimer) { stopSend(); startSend().catch((e) => alert(e.message)); }
 }
-$('presetSafe')?.addEventListener('click', () => applyPreset(128, 'M', 8));
-$('presetTurbo')?.addEventListener('click', () => applyPreset(512, 'L', 15));
+$('presetSafe')?.addEventListener('click', () => applyPreset(128, 'M', 8, 'presetSafe'));
+$('presetTurbo')?.addEventListener('click', () => applyPreset(512, 'L', 15, 'presetTurbo'));
+// Manual edits to the advanced fields mean neither preset is active any more.
+for (const id of ['blockSize', 'ecc', 'fps']) {
+  $(id)?.addEventListener('input', () => {
+    $('presetSafe')?.setAttribute('aria-pressed', 'false');
+    $('presetTurbo')?.setAttribute('aria-pressed', 'false');
+  });
+}
 
 // ============================== RECEIVE =======================================
 let stream = null;
@@ -228,6 +249,7 @@ function onProgress(p) {
   if (p.K) {
     const pct = Math.round((p.recovered / p.K) * 100);
     $('recvBar').style.width = pct + '%';
+    $('recvBarWrap')?.setAttribute('aria-valuenow', String(pct));
     // Effective throughput: useful bytes recovered per second since lock-on.
     if (!_rxStart) _rxStart = performance.now();
     const secs = (performance.now() - _rxStart) / 1000;
@@ -260,6 +282,7 @@ function onDone(result) {
   $('startRecv').disabled = false;
   $('stopRecv').disabled = true;
   $('recvBar').style.width = '100%';
+  $('recvBarWrap')?.setAttribute('aria-valuenow', '100');
 
   const blob = new Blob([result.bytes]);
   const url = URL.createObjectURL(blob);

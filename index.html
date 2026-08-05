@@ -2,133 +2,335 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Project Vision — QR file transfer</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#06231f" />
+  <meta name="description" content="Transfer files between devices with no network, using animated QR codes." />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="QR Transfer" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <style>
-    /* Build v4 theme — deep teal. The background colour is deliberately
-       distinct per build so you can tell at a glance (on BOTH devices) that
-       you are running the latest deployed version. See #buildBadge. */
+    /* ── Build v8 theme — deep teal ────────────────────────────────────────
+       The background colour is deliberately distinct per build so you can tell
+       at a glance, on BOTH devices, which version is running. See #buildBadge.
+
+       HARD RULE: nothing may apply filter, opacity, blur, transform or CSS
+       scaling to #qr. The camera has to resolve individual modules; any of
+       those would cost decode reliability. Keep it pure black on white.
+    ------------------------------------------------------------------------ */
     :root {
-      --bg: #06231f; --panel: #0c332d; --fg: #eafff8;
-      --muted: #8fc7ba; --accent: #2fd7a2; --ok: #46d39a; --bad: #ff6b81;
-      --border: #14544a; --sunken: #041916;
+      --bg:      #06231f;
+      --bg-2:    #072a25;
+      --panel:   #0c332d;
+      --panel-2: #0f3b34;
+      --sunken:  #041916;
+      --fg:      #eafff8;
+      --muted:   #9fd3c6;
+      --accent:  #2fd7a2;
+      --accent-2:#4be3b8;
+      --on-accent:#04211c;
+      --ok:      #46d39a;
+      --bad:     #ff8f9f;
+      --border:  #175b50;
+      --border-2:#1e6f61;
+
+      --r-sm: 8px;
+      --r-md: 12px;
+      --r-lg: 16px;
+      --r-pill: 999px;
+      --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;
+      --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+      --shadow: 0 8px 24px rgba(0,0,0,.35);
+      --ring: 0 0 0 3px rgba(47,215,162,.45);
     }
+
     * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+
     body {
-      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      background: var(--bg); color: var(--fg); line-height: 1.5;
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background:
+        radial-gradient(1100px 520px at 12% -10%, #0d3c34 0%, transparent 60%),
+        radial-gradient(900px 480px at 100% 0%, #0a352f 0%, transparent 55%),
+        var(--bg);
+      background-attachment: fixed;
+      color: var(--fg);
+      line-height: 1.55;
+      font-size: 16px;
+      padding-bottom: env(safe-area-inset-bottom);
     }
-    header { padding: 16px 20px; border-bottom: 1px solid var(--border); }
-    header h1 { margin: 0; font-size: 18px; }
-    header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
-    main { max-width: 720px; margin: 0 auto; padding: 16px; }
-    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: var(--sp-4);
+      padding: calc(var(--sp-4) + env(safe-area-inset-top)) var(--sp-4) var(--sp-4);
+      max-width: 760px; margin: 0 auto;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand { display: flex; gap: var(--sp-3); align-items: flex-start; min-width: 0; }
+    .brand img { width: 44px; height: 44px; border-radius: 11px; flex: none; box-shadow: var(--shadow); }
+    .brand-text { min-width: 0; }
+    header h1 {
+      margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -.01em;
+      display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+    }
+    .tagline { margin: 2px 0 0; color: var(--muted); font-size: 13.5px; }
+    #buildBadge {
+      font-size: 11px; font-weight: 700; letter-spacing: .02em;
+      background: var(--accent); color: var(--on-accent);
+      padding: 3px 9px; border-radius: var(--r-pill); white-space: nowrap;
+    }
+    #offlineStatus { margin: var(--sp-2) 0 0; font-size: 12.5px; color: var(--muted); }
+    .header-actions { display: flex; flex-direction: column; gap: var(--sp-2); flex: none; }
+
+    /* ── Buttons ────────────────────────────────────────────────────────── */
+    button { font: inherit; cursor: pointer; }
+    .action {
+      width: 100%; padding: 13px var(--sp-4); border: 1px solid transparent;
+      border-radius: var(--r-md); background: linear-gradient(180deg, var(--accent-2), var(--accent));
+      color: var(--on-accent); font-size: 15px; font-weight: 650;
+      transition: filter .15s, transform .06s;
+      min-height: 44px;
+    }
+    .action:hover:not(:disabled) { filter: brightness(1.07); }
+    .action:active:not(:disabled) { transform: translateY(1px); }
+    .action.secondary {
+      background: var(--panel-2); color: var(--fg); border-color: var(--border-2);
+    }
+    .action.secondary:hover:not(:disabled) { background: #14453c; filter: none; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .action.compact { width: auto; padding: 8px 12px; font-size: 13px; white-space: nowrap; }
+    .btn-row { display: flex; gap: var(--sp-3); margin-top: var(--sp-4); }
+    .btn-row .action { margin-top: 0; }
+    :focus-visible { outline: none; box-shadow: var(--ring); border-radius: var(--r-sm); }
+
+    /* ── Layout / tabs ──────────────────────────────────────────────────── */
+    main { max-width: 760px; margin: 0 auto; padding: var(--sp-4); }
+    .tabs {
+      display: flex; gap: var(--sp-1); margin-bottom: var(--sp-4);
+      background: var(--sunken); border: 1px solid var(--border);
+      border-radius: var(--r-md); padding: var(--sp-1);
+    }
     .tabs button {
-      flex: 1; padding: 10px; border: 1px solid var(--border); background: var(--panel);
-      color: var(--fg); border-radius: 8px; cursor: pointer; font-size: 14px;
+      flex: 1; padding: 10px var(--sp-2); border: none; background: transparent;
+      color: var(--muted); border-radius: var(--r-sm); font-size: 14.5px; font-weight: 600;
+      min-height: 44px; transition: background .15s, color .15s;
     }
-    .tabs button.active { background: var(--accent); color: #04211c; border-color: var(--accent); font-weight: 600; }
-    .panel { display: none; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+    .tabs button:hover:not(.active) { color: var(--fg); background: rgba(255,255,255,.04); }
+    .tabs button.active { background: var(--accent); color: var(--on-accent); }
+
+    .panel {
+      display: none;
+      background: linear-gradient(180deg, var(--panel-2), var(--panel));
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: var(--sp-5) var(--sp-4);
+      box-shadow: var(--shadow);
+    }
     .panel.active { display: block; }
-    label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+
+    /* ── Form controls ──────────────────────────────────────────────────── */
+    .field-label, label {
+      display: block; font-size: 12.5px; font-weight: 600; letter-spacing: .02em;
+      text-transform: uppercase; color: var(--muted); margin: 0 0 var(--sp-2);
+    }
     input[type=file], select, input[type=number] {
-      width: 100%; padding: 8px; background: var(--sunken); color: var(--fg);
-      border: 1px solid var(--border); border-radius: 8px; font-size: 14px;
+      width: 100%; padding: 11px var(--sp-3);
+      background: var(--sunken); color: var(--fg);
+      border: 1px solid var(--border-2); border-radius: var(--r-sm);
+      font-size: 16px; /* >=16px so iOS does not zoom on focus */
+      min-height: 44px;
     }
-    .row { display: flex; gap: 12px; }
-    .row > div { flex: 1; }
-    button.action {
-      margin-top: 14px; width: 100%; padding: 12px; border: none; border-radius: 8px;
-      background: var(--accent); color: #04211c; font-size: 15px; font-weight: 600; cursor: pointer;
+    input[type=file] { padding: 9px var(--sp-3); }
+    .row { display: flex; gap: var(--sp-3); }
+    .row > div { flex: 1; min-width: 0; }
+    .group { margin-top: var(--sp-5); }
+    .group:first-of-type { margin-top: 0; }
+
+    /* Preset segmented control */
+    .presets { display: flex; gap: var(--sp-2); }
+    .preset {
+      flex: 1; padding: 10px var(--sp-2); border-radius: var(--r-sm);
+      border: 1px solid var(--border-2); background: var(--sunken); color: var(--fg);
+      font-size: 13.5px; font-weight: 600; min-height: 44px; text-align: center;
+      transition: background .15s, border-color .15s;
     }
-    button.action.secondary { background: var(--panel); color: var(--fg); border: 1px solid var(--border); }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    canvas#qr { display: block; margin: 16px auto 0; background: #fff; border-radius: 8px; max-width: 100%; image-rendering: pixelated; }
-    video { width: 100%; max-height: 320px; border-radius: 8px; background: #000; margin-top: 12px; }
-    .stat { font-size: 13px; color: var(--muted); margin-top: 10px; }
-    .stat b { color: var(--fg); }
-    .bar { height: 10px; background: var(--sunken); border-radius: 6px; overflow: hidden; margin-top: 8px; border: 1px solid var(--border); }
-    .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
-    .result { margin-top: 14px; padding: 12px; border-radius: 8px; border: 1px solid var(--border); }
-    .result.ok { border-color: var(--ok); }
+    .preset small { display: block; font-weight: 500; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+    .preset:hover { background: #0a2b26; }
+    .preset[aria-pressed="true"] {
+      border-color: var(--accent); background: rgba(47,215,162,.14);
+    }
+    .preset[aria-pressed="true"] small { color: var(--accent); }
+
+    /* ── QR plate ───────────────────────────────────────────────────────── */
+    .qr-plate {
+      margin: var(--sp-5) auto 0; width: fit-content;
+      background: #fff; padding: var(--sp-3); border-radius: var(--r-md);
+      box-shadow: var(--shadow); line-height: 0;
+    }
+    /* No filter/transform/opacity here — the camera must resolve each module. */
+    canvas#qr { display: block; max-width: 100%; height: auto; image-rendering: pixelated; }
+
+    video {
+      width: 100%; max-height: 340px; border-radius: var(--r-md);
+      background: #000; margin-top: var(--sp-4); border: 1px solid var(--border);
+      display: block; object-fit: cover;
+    }
+
+    /* ── Status, chips, progress ─────────────────────────────────────────── */
+    .stat { font-size: 13px; color: var(--muted); margin-top: var(--sp-3); }
+    .stat b { color: var(--fg); font-weight: 650; }
+    .hint { font-size: 12.5px; color: var(--muted); margin-top: var(--sp-3); opacity: .95; }
+    .warn { color: var(--bad); font-weight: 600; }
+
+    .bar {
+      height: 10px; background: var(--sunken); border-radius: var(--r-pill);
+      overflow: hidden; margin-top: var(--sp-3); border: 1px solid var(--border);
+    }
+    .bar > div {
+      height: 100%; width: 0; border-radius: var(--r-pill);
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      transition: width .2s ease-out;
+    }
+
+    .result {
+      margin-top: var(--sp-4); padding: var(--sp-4);
+      border-radius: var(--r-md); border: 1px solid var(--border);
+      background: var(--sunken);
+    }
+    .result.ok { border-color: var(--ok); box-shadow: inset 0 0 0 1px rgba(70,211,154,.25); }
     .result.bad { border-color: var(--bad); }
-    a.download { color: var(--accent); font-weight: 600; }
-    pre.log { background: var(--sunken); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 12px; overflow: auto; max-height: 320px; white-space: pre-wrap; }
-    .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
-    .warn { color: var(--bad); }
+    a.download {
+      display: inline-block; margin-top: var(--sp-3);
+      background: var(--accent); color: var(--on-accent);
+      padding: 10px var(--sp-4); border-radius: var(--r-sm);
+      font-weight: 650; text-decoration: none; min-height: 44px;
+    }
+    a.download:hover { filter: brightness(1.07); }
+
+    pre.log {
+      background: var(--sunken); border: 1px solid var(--border);
+      border-radius: var(--r-md); padding: var(--sp-4);
+      font-size: 12.5px; overflow: auto; max-height: 320px;
+      white-space: pre-wrap; margin-top: var(--sp-4);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
+
+    @media (max-width: 560px) {
+      header { flex-direction: column; align-items: stretch; }
+      .header-actions { flex-direction: row; }
+      .header-actions .action { flex: 1; }
+      .row { flex-wrap: wrap; }
+      .row > div { flex: 1 1 30%; }
+      .presets { flex-direction: column; }
+      .panel { padding: var(--sp-4) var(--sp-3); }
+      /* Full-width actions read better than two cramped, wrapping buttons. */
+      .btn-row { flex-direction: column; gap: var(--sp-2); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      /* The QR animation itself is functional and is NOT disabled here. */
+      * { transition-duration: .01ms !important; }
+    }
   </style>
 </head>
-<body data-build="v7">
-  <header style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-    <div>
-      <h1>Project Vision <span id="buildBadge" style="font-size:12px; font-weight:600; background:var(--accent); color:#06231f; padding:2px 8px; border-radius:999px; vertical-align:middle;">BUILD v7 · robust</span></h1>
-      <p>Transfer a file device-to-device with no network — through a stream of animated QR codes.</p>
-      <p id="offlineStatus" class="stat" style="margin-top:6px; color:var(--muted);"></p>
+<body data-build="v8">
+  <header>
+    <div class="brand">
+      <img src="icons/icon-192.png" alt="" width="44" height="44" />
+      <div class="brand-text">
+        <h1>Project Vision <span id="buildBadge">BUILD v8 · polish</span></h1>
+        <p class="tagline">Send a file device-to-device with no network — as a stream of animated QR codes.</p>
+        <p id="offlineStatus" class="stat" role="status"></p>
+      </div>
     </div>
-    <div style="display:flex; flex-direction:column; gap:6px;">
-      <button id="installBtn" class="action" style="display:none; width:auto; margin:0; white-space:nowrap;">Install app</button>
-      <button id="forceUpdate" class="action secondary" style="width:auto; margin:0; white-space:nowrap; padding:8px 12px; font-size:13px;">↻ Force update</button>
+    <div class="header-actions">
+      <button id="installBtn" class="action compact" style="display:none;">Install app</button>
+      <button id="forceUpdate" class="action secondary compact" title="Clear caches and reload the newest version">↻ Force update</button>
     </div>
   </header>
+
   <main>
-    <div class="tabs">
-      <button data-tab="send" class="active">Send</button>
-      <button data-tab="receive">Receive</button>
-      <button data-tab="test">Self-test</button>
+    <div class="tabs" role="tablist" aria-label="Mode">
+      <button data-tab="send" class="active" role="tab" aria-selected="true" aria-controls="send" id="tab-send">Send</button>
+      <button data-tab="receive" role="tab" aria-selected="false" aria-controls="receive" id="tab-receive">Receive</button>
+      <button data-tab="test" role="tab" aria-selected="false" aria-controls="test" id="tab-test">Self-test</button>
     </div>
 
     <!-- SEND -->
-    <section id="send" class="panel active">
-      <label for="file">File to send (small files recommended, &lt; ~100 KB)</label>
-      <input type="file" id="file" />
-      <div class="row">
-        <div>
-          <label for="blockSize">Block size (bytes)</label>
-          <input type="number" id="blockSize" value="128" min="16" max="2048" />
-        </div>
-        <div>
-          <label for="ecc">Error correction</label>
-          <select id="ecc"><option>L</option><option selected>M</option><option>Q</option><option>H</option></select>
-        </div>
-        <div>
-          <label for="fps">Frames / sec</label>
-          <input type="number" id="fps" value="8" min="1" max="30" />
+    <section id="send" class="panel active" role="tabpanel" aria-labelledby="tab-send">
+      <div class="group">
+        <label for="file">File to send <span style="text-transform:none;font-weight:500">(small files work best — under ~100 KB)</span></label>
+        <input type="file" id="file" />
+      </div>
+
+      <div class="group">
+        <span class="field-label" id="presetLabel">Speed preset</span>
+        <div class="presets" role="group" aria-labelledby="presetLabel">
+          <button class="preset" id="presetSafe" aria-pressed="true">Reliable<small>any phone · 128 · M · 8fps</small></button>
+          <button class="preset" id="presetTurbo" aria-pressed="false">Turbo<small>needs hardware scan · 512 · L · 15fps</small></button>
         </div>
       </div>
-      <div class="row" style="margin-top:10px;">
-        <button class="action secondary" id="presetSafe" style="margin-top:0;">Reliable (any phone)</button>
-        <button class="action secondary" id="presetTurbo" style="margin-top:0;">Turbo (needs hardware scan)</button>
+
+      <div class="group">
+        <span class="field-label">Advanced</span>
+        <div class="row">
+          <div>
+            <label for="blockSize">Block size</label>
+            <input type="number" id="blockSize" value="128" min="16" max="2048" />
+          </div>
+          <div>
+            <label for="ecc">Error corr.</label>
+            <select id="ecc"><option>L</option><option selected>M</option><option>Q</option><option>H</option></select>
+          </div>
+          <div>
+            <label for="fps">Frames/sec</label>
+            <input type="number" id="fps" value="8" min="1" max="30" />
+          </div>
+        </div>
       </div>
-      <button class="action" id="startSend">Start transmitting</button>
-      <button class="action secondary" id="stopSend" disabled>Stop</button>
-      <canvas id="qr" width="320" height="320"></canvas>
-      <div class="stat" id="sendStat"></div>
-      <div class="hint">Point the receiving device's camera at this screen. The stream loops forever, so it doesn't matter which frame the receiver starts on.</div>
+
+      <div class="btn-row">
+        <button class="action" id="startSend">Start transmitting</button>
+        <button class="action secondary" id="stopSend" disabled>Stop</button>
+      </div>
+
+      <div class="qr-plate"><canvas id="qr" width="320" height="320" aria-label="Animated QR code being transmitted" role="img"></canvas></div>
+      <div class="stat" id="sendStat" role="status"></div>
+      <p class="hint">Point the receiving device's camera at this screen. The stream loops forever, so it doesn't matter which frame the receiver starts on.</p>
     </section>
 
     <!-- RECEIVE -->
-    <section id="receive" class="panel">
-      <button class="action" id="startRecv">Start camera</button>
-      <button class="action secondary" id="stopRecv" disabled>Stop camera</button>
-      <video id="video" playsinline muted></video>
-      <div class="stat" id="recvStat">Idle.</div>
-      <div class="bar"><div id="recvBar"></div></div>
+    <section id="receive" class="panel" role="tabpanel" aria-labelledby="tab-receive">
+      <div class="btn-row" style="margin-top:0;">
+        <button class="action" id="startRecv">Start camera</button>
+        <button class="action secondary" id="stopRecv" disabled>Stop camera</button>
+      </div>
+      <video id="video" playsinline muted aria-label="Camera preview"></video>
+      <div class="stat" id="recvStat" role="status" aria-live="polite">Idle.</div>
+      <div class="bar" role="progressbar" aria-labelledby="recvStat" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="recvBarWrap"><div id="recvBar"></div></div>
       <div id="recvResult"></div>
-      <div class="hint" id="recvHint">Camera needs a secure context (HTTPS or localhost). See the README if the camera won't start.</div>
+      <p class="hint" id="recvHint">The camera needs a secure context (HTTPS or localhost). If it won't start, see the README.</p>
     </section>
 
     <!-- SELF-TEST -->
-    <section id="test" class="panel">
-      <p class="stat">Run the loopback tests — no camera or second device needed.</p>
-      <button class="action" id="runCodec">Run codec loopback (fast)</button>
-      <button class="action secondary" id="runOptical">Run optical loopback (renders + scans real QRs)</button>
-      <pre class="log" id="testLog">Ready.</pre>
+    <section id="test" class="panel" role="tabpanel" aria-labelledby="tab-test">
+      <p class="stat" style="margin-top:0;">Verify the whole pipeline with no camera and no second device.</p>
+      <div class="btn-row">
+        <button class="action" id="runCodec">Codec loopback</button>
+        <button class="action secondary" id="runOptical">Optical loopback</button>
+      </div>
+      <p class="hint">Codec pushes frames through a simulated lossy channel. Optical renders real QR codes and scans them back.</p>
+      <pre class="log" id="testLog" role="log" aria-live="polite">Ready.</pre>
     </section>
   </main>
 
