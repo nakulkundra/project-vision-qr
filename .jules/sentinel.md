@@ -1,0 +1,4 @@
+## 2026-08-05 - Add Strict Content Security Policy (CSP)
+**Vulnerability:** The application was lacking a Content Security Policy header. This created an expansive XSS attack surface, particularly because variables mapped from parsed user input (QR scan data) were being set directly via `.innerHTML` without consistent manual sanitization coverage throughout all code paths.
+**Learning:** Adding CSP headers must balance security with functionality in modern web apps. A completely locked down policy (`script-src 'self'`) breaks common development tooling that relies on `eval()` for sourcemaps or hot-module reloading.
+**Prevention:** Always include a `Content-Security-Policy` header in web applications. However, before finalizing the policy, ensure it's audited against the actual functional requirements and development workflow of the application (e.g., selectively allowing `'unsafe-inline'` for styles and `'unsafe-eval'` for scripts when necessary).
