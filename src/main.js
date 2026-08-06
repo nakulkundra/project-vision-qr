@@ -36,65 +36,78 @@ async function startSend() {
   const fileInput = $('file');
   if (!fileInput.files.length) { alert('Choose a file first.'); return; }
   const file = fileInput.files[0];
-  const bytes = new Uint8Array(await file.arrayBuffer());
 
-  const blockSize = Math.max(16, Math.min(2048, +$('blockSize').value || 128));
-  const ecc = $('ecc').value;
-  const fps = Math.max(1, Math.min(30, +$('fps').value || 8));
+  const startBtn = $('startSend');
+  const originalText = startBtn.textContent;
+  startBtn.disabled = true;
+  startBtn.textContent = 'Processing...';
 
-  const sender = await new Sender(bytes, file.name, { blockSize }).init();
-  frameNo = 0;
-  const baseStat =
-    `File <b>${escapeHtml(file.name)}</b> · ${bytes.length} bytes · ` +
-    `K=<b>${sender.K}</b> blocks · session <b>${sender.sessionId.toString(16).padStart(4, '0')}</b> · ` +
-    `SHA-256 <b>${toHex(sender.hash).slice(0, 12)}…</b>`;
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
 
-  const canvas = $('qr');
-  // Use the full available width — bigger modules on screen are the single
-  // biggest factor in whether a phone can decode a dense QR.
-  // Measure the PANEL, not canvas.parentElement: the parent is the white
-  // .qr-plate, which is width:fit-content and therefore sized BY the canvas —
-  // measuring it would be circular and collapse the code to a few pixels.
-  const host = canvas.closest('.panel') || canvas.parentElement;
-  const PANEL_PAD = 32, PLATE_PAD = 24; // horizontal padding either side of each
-  const avail = host.clientWidth - PANEL_PAD - PLATE_PAD;
-  const maxPx = Math.min(Math.max(220, avail), 640);
+    const blockSize = Math.max(16, Math.min(2048, +$('blockSize').value || 128));
+    const ecc = $('ecc').value;
+    const fps = Math.max(1, Math.min(30, +$('fps').value || 8));
 
-  // Density guidance. Measure a representative DATA frame, not the first frame
-  // (which is a small META frame and would under-report density — the unsafe
-  // direction, since it is the dense DATA frames a camera struggles with).
-  // Empirically: 109 modules failed to decode at ~5px/module; 81 decoded fine.
-  const perFrame = blockSize + 9; // 5-byte header + 4-byte seed + payload
-  // Lock one QR version for the whole session so the code never changes size
-  // mid-stream (see buildQR). Sized for the largest frame — the DATA frames.
-  let fixedVersion = versionForPayload(perFrame, ecc);
-  // QR version 23 at ECC L is not decodable by the vendored jsQR (verified by
-  // sweeping versions 5-40 at L and M: L fails only at 23, for every mask and
-  // at 2-5px/module). Nudge to the next version so the config can never be a
-  // silent 100% failure on the software-decode path (which is every iPhone).
-  if (fixedVersion === 23 && ecc === 'L') fixedVersion = 24;
-  const dataModules = 4 * fixedVersion + 17;
-  const theoretical = ((perFrame * fps) / 1024).toFixed(1);
-  const pxPerModule = (maxPx / (dataModules + 8)).toFixed(1);
-  const dense = dataModules >= 100 || pxPerModule < 4;
-  const statLine = baseStat +
-    ` · QR <b>${dataModules}×${dataModules}</b> (${pxPerModule}px/module) · ~<b>${theoretical} KB/s</b> ceiling` +
-    (dense ? ` · <span class="warn">very dense — if the receiver can't read it, tap "Reliable" or lower the block size</span>` : '');
-  $('sendStat').innerHTML = statLine;
+    const sender = await new Sender(bytes, file.name, { blockSize }).init();
+    frameNo = 0;
+    const baseStat =
+      `File <b>${escapeHtml(file.name)}</b> · ${bytes.length} bytes · ` +
+      `K=<b>${sender.K}</b> blocks · session <b>${sender.sessionId.toString(16).padStart(4, '0')}</b> · ` +
+      `SHA-256 <b>${toHex(sender.hash).slice(0, 12)}…</b>`;
 
-  const tick = () => {
-    const frame = sender.nextFrame();
-    renderToCanvas(canvas, frame, { ecc, maxPx, version: fixedVersion });
-    frameNo++;
-    const kind = frame[4] === 1 ? 'META' : 'DATA';
-    $('sendStat').dataset.frame = frameNo;
-    $('sendStat').title = `frame #${frameNo} (${kind})`;
-  };
-  tick();
+    const canvas = $('qr');
+    // Use the full available width — bigger modules on screen are the single
+    // biggest factor in whether a phone can decode a dense QR.
+    // Measure the PANEL, not canvas.parentElement: the parent is the white
+    // .qr-plate, which is width:fit-content and therefore sized BY the canvas —
+    // measuring it would be circular and collapse the code to a few pixels.
+    const host = canvas.closest('.panel') || canvas.parentElement;
+    const PANEL_PAD = 32, PLATE_PAD = 24; // horizontal padding either side of each
+    const avail = host.clientWidth - PANEL_PAD - PLATE_PAD;
+    const maxPx = Math.min(Math.max(220, avail), 640);
 
-  sendTimer = setInterval(tick, Math.round(1000 / fps));
-  $('startSend').disabled = true;
-  $('stopSend').disabled = false;
+    // Density guidance. Measure a representative DATA frame, not the first frame
+    // (which is a small META frame and would under-report density — the unsafe
+    // direction, since it is the dense DATA frames a camera struggles with).
+    // Empirically: 109 modules failed to decode at ~5px/module; 81 decoded fine.
+    const perFrame = blockSize + 9; // 5-byte header + 4-byte seed + payload
+    // Lock one QR version for the whole session so the code never changes size
+    // mid-stream (see buildQR). Sized for the largest frame — the DATA frames.
+    let fixedVersion = versionForPayload(perFrame, ecc);
+    // QR version 23 at ECC L is not decodable by the vendored jsQR (verified by
+    // sweeping versions 5-40 at L and M: L fails only at 23, for every mask and
+    // at 2-5px/module). Nudge to the next version so the config can never be a
+    // silent 100% failure on the software-decode path (which is every iPhone).
+    if (fixedVersion === 23 && ecc === 'L') fixedVersion = 24;
+    const dataModules = 4 * fixedVersion + 17;
+    const theoretical = ((perFrame * fps) / 1024).toFixed(1);
+    const pxPerModule = (maxPx / (dataModules + 8)).toFixed(1);
+    const dense = dataModules >= 100 || pxPerModule < 4;
+    const statLine = baseStat +
+      ` · QR <b>${dataModules}×${dataModules}</b> (${pxPerModule}px/module) · ~<b>${theoretical} KB/s</b> ceiling` +
+      (dense ? ` · <span class="warn">very dense — if the receiver can't read it, tap "Reliable" or lower the block size</span>` : '');
+    $('sendStat').innerHTML = statLine;
+
+    const tick = () => {
+      const frame = sender.nextFrame();
+      renderToCanvas(canvas, frame, { ecc, maxPx, version: fixedVersion });
+      frameNo++;
+      const kind = frame[4] === 1 ? 'META' : 'DATA';
+      $('sendStat').dataset.frame = frameNo;
+      $('sendStat').title = `frame #${frameNo} (${kind})`;
+    };
+    tick();
+
+    sendTimer = setInterval(tick, Math.round(1000 / fps));
+    $('stopSend').disabled = false;
+  } catch (e) {
+    startBtn.disabled = false;
+    throw e;
+  } finally {
+    startBtn.textContent = originalText;
+    if (!scanning) startBtn.disabled = false;
+  }
 }
 
 function stopSend() {
@@ -141,51 +154,60 @@ let camInfo = '';  // actual granted camera resolution/fps, for diagnostics
 let _scanArmedAt = 0, _scanWatchdog = null; // scan-loop stall watchdog
 
 async function startRecv() {
-  // Decide the decoder FIRST, because it dictates the affordable resolution.
-  // The native BarcodeDetector is hardware-accelerated, so a 1080p feed is
-  // nearly free and buys resolution for denser (higher-payload) codes. jsQR is
-  // pure JS and its cost scales with pixels: a full 1080p frame measured ~615ms
-  // per decode (~2 scans/sec), so the software path gets 720p instead. Asking
-  // for 1080p on the jsQR path was a real throughput regression.
-  scanner = await new Scanner().init();
-  const wantHiRes = scanner.mode === 'native';
+  const startBtn = $('startRecv');
+  const originalText = startBtn.textContent;
+  startBtn.disabled = true;
+  startBtn.textContent = 'Starting...';
+
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: 'environment',
-        width: { ideal: wantHiRes ? 1920 : 1280 },
-        height: { ideal: wantHiRes ? 1080 : 720 },
-        frameRate: { ideal: 30 },
-      },
-    });
-  } catch (e) {
-    $('recvHint').innerHTML =
-      `<span class="warn">Camera blocked:</span> ${escapeHtml(e.message)}. ` +
-      `A camera requires HTTPS or localhost — see the README.`;
-    return;
+    // Decide the decoder FIRST, because it dictates the affordable resolution.
+    // The native BarcodeDetector is hardware-accelerated, so a 1080p feed is
+    // nearly free and buys resolution for denser (higher-payload) codes. jsQR is
+    // pure JS and its cost scales with pixels: a full 1080p frame measured ~615ms
+    // per decode (~2 scans/sec), so the software path gets 720p instead. Asking
+    // for 1080p on the jsQR path was a real throughput regression.
+    scanner = await new Scanner().init();
+    const wantHiRes = scanner.mode === 'native';
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment',
+          width: { ideal: wantHiRes ? 1920 : 1280 },
+          height: { ideal: wantHiRes ? 1080 : 720 },
+          frameRate: { ideal: 30 },
+        },
+      });
+    } catch (e) {
+      $('recvHint').innerHTML =
+        `<span class="warn">Camera blocked:</span> ${escapeHtml(e.message)}. ` +
+        `A camera requires HTTPS or localhost — see the README.`;
+      return;
+    }
+    const video = $('video');
+    video.srcObject = stream;
+    await video.play();
+
+    // Report what the camera actually granted. Requested constraints are only a
+    // hint — a feed can silently come back at 15fps or a lower resolution, which
+    // caps throughput no matter what the sender does.
+    try {
+      const s = stream.getVideoTracks()[0]?.getSettings?.() || {};
+      camInfo = `${s.width || '?'}×${s.height || '?'}@${Math.round(s.frameRate || 0) || '?'}fps`;
+    } catch { camInfo = ''; }
+
+    receiver = new Receiver(onProgress, onDone);
+    scanning = true;
+    _scanFrames = 0; _scanFpsAt = performance.now(); scanFps = 0; _rxStart = 0;
+    $('stopRecv').disabled = false;
+    $('recvResult').innerHTML = '';
+    $('recvStat').textContent =
+      `Scanning (${scanner.mode === 'native' ? 'native BarcodeDetector' : 'jsQR'})… point at the sender screen.`;
+    scanLoop();
+    startScanWatchdog();
+  } finally {
+    startBtn.textContent = originalText;
+    if (!scanning) startBtn.disabled = false;
   }
-  const video = $('video');
-  video.srcObject = stream;
-  await video.play();
-
-  // Report what the camera actually granted. Requested constraints are only a
-  // hint — a feed can silently come back at 15fps or a lower resolution, which
-  // caps throughput no matter what the sender does.
-  try {
-    const s = stream.getVideoTracks()[0]?.getSettings?.() || {};
-    camInfo = `${s.width || '?'}×${s.height || '?'}@${Math.round(s.frameRate || 0) || '?'}fps`;
-  } catch { camInfo = ''; }
-
-  receiver = new Receiver(onProgress, onDone);
-  scanning = true;
-  _scanFrames = 0; _scanFpsAt = performance.now(); scanFps = 0; _rxStart = 0;
-  $('startRecv').disabled = true;
-  $('stopRecv').disabled = false;
-  $('recvResult').innerHTML = '';
-  $('recvStat').textContent =
-    `Scanning (${scanner.mode === 'native' ? 'native BarcodeDetector' : 'jsQR'})… point at the sender screen.`;
-  scanLoop();
-  startScanWatchdog();
 }
 
 // Schedule the next scan pass. requestVideoFrameCallback fires once per NEW
