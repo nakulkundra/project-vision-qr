@@ -6,7 +6,7 @@
 // runs current code while the cache still makes the app work fully offline.
 // Bump CACHE_VERSION whenever any precached file changes.
 
-const CACHE_VERSION = 'v9';
+const CACHE_VERSION = 'v10';
 const CACHE_NAME = `project-vision-${CACHE_VERSION}`;
 
 // Paths are relative to this script's location (the app root), so they work

@@ -4,7 +4,7 @@
 // and main.js are fetched separately, so a stale cache can pair fresh HTML with
 // stale JS — which looks like "the buttons are visible but do nothing". When the
 // stamps disagree we say so and offer a one-tap hard refresh.
-export const BUILD = 'v9';
+export const BUILD = 'v10';
 
 import { Sender } from './sender.js';
 import { Receiver } from './receiver.js';
@@ -167,7 +167,10 @@ function applyPreset(blockSize, ecc, fps, activeId) {
   for (const id of ['presetSafe', 'presetTurbo']) {
     $(id)?.setAttribute('aria-pressed', String(id === activeId));
   }
-  if (sendTimer) { stopSend(); startSend().catch((e) => alert(e.message)); }
+  if (sendTimer) {
+    stopSend();
+    startSend().catch((e) => { $('fileError').textContent = e.message; });
+  }
 }
 $('presetSafe')?.addEventListener('click', () => applyPreset(128, 'M', 8, 'presetSafe'));
 $('presetTurbo')?.addEventListener('click', () => applyPreset(512, 'L', 15, 'presetTurbo'));
