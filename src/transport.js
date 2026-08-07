@@ -64,12 +64,6 @@ export function decodeScanned(str) {
   return null;
 }
 
-// True if `bytes` carries our magic + version. Exported so callers can validate
-// without duplicating the constants.
-export function isFrameShaped(bytes) {
-  return looksLikeFrame(bytes);
-}
-
 export function decodeBase45(str) {
   if (str == null) return null;
   const n = str.length;
