@@ -1,3 +1,4 @@
+import { Scanner } from '../src/qr.js';
 import { decodeScanned, encodeBase45, isFrameShaped, decodeBase45 } from '../src/transport.js';
 import { buildMeta, buildData, parseFrame, bytesToLatin1, splitIntoBlocks } from '../src/protocol.js';
 import { Receiver } from '../src/receiver.js';
@@ -174,6 +175,22 @@ ok('bytesToLatin1 maps high-byte values correctly', bytesToLatin1(new Uint8Array
   }
   ok('robustSolitonCDF elements are monotonically increasing', isMonotonic);
   ok('robustSolitonCDF elements are bounded in [0, 1]', allInRange);
+}
+
+// ---- FIX 4: BarcodeDetector init fails cleanly when getSupportedFormats throws ----
+{
+  const origWindow = global.window;
+  global.window = {
+    BarcodeDetector: class {
+      static async getSupportedFormats() {
+        throw new Error('Test error: getSupportedFormats failed');
+      }
+    }
+  };
+  const s = new Scanner();
+  await s.init();
+  ok('Scanner init falls back to jsqr if getSupportedFormats throws', s.mode === 'jsqr', `mode=${s.mode}`);
+  global.window = origWindow;
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
