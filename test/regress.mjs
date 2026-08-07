@@ -1,5 +1,5 @@
 import { decodeScanned, encodeBase45, isFrameShaped } from '../src/transport.js';
-import { buildMeta, buildData, parseFrame } from '../src/protocol.js';
+import { buildMeta, buildData, parseFrame, bytesToLatin1 } from '../src/protocol.js';
 import { Receiver } from '../src/receiver.js';
 import { Sender } from '../src/sender.js';
 
@@ -71,5 +71,11 @@ async function restartScenario(feedUntilProgress) {
   ok('onDone fired exactly once', calls === 1, `calls=${calls} buffered=${bufferedCount}`);
   ok('buffered flush still verifies', !!(rx.result && rx.result.verified));
 }
+
+// ---- Unit Test for bytesToLatin1 ----
+ok('bytesToLatin1 maps basic ASCII', bytesToLatin1(new Uint8Array([65, 66, 67])) === 'ABC');
+ok('bytesToLatin1 maps empty array', bytesToLatin1(new Uint8Array([])) === '');
+ok('bytesToLatin1 maps high-byte values correctly', bytesToLatin1(new Uint8Array([255, 128])) === '\xff\x80');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
