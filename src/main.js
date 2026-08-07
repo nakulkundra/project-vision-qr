@@ -50,7 +50,17 @@ let frameNo = 0;
 
 async function startSend() {
   const fileInput = $('file');
-  if (!fileInput.files.length) { alert('Choose a file first.'); return; }
+  // Inline validation rather than alert(): a modal dialog is disruptive, is not
+  // announced as a field error, and gives no way to associate the message with
+  // the input. role="alert" + aria-invalid does both.
+  if (!fileInput.files.length) {
+    $('fileError').textContent = 'Please choose a file to send.';
+    fileInput.setAttribute('aria-invalid', 'true');
+    fileInput.focus();
+    return;
+  }
+  $('fileError').textContent = '';
+  fileInput.removeAttribute('aria-invalid');
   const file = fileInput.files[0];
 
   const startBtn = $('startSend');
@@ -135,7 +145,15 @@ function stopSend() {
   syncWakeLock();
 }
 
-$('startSend').addEventListener('click', () => startSend().catch((e) => alert(e.message)));
+// Clear the validation message as soon as a file is chosen.
+$('file')?.addEventListener('change', () => {
+  $('fileError').textContent = '';
+  $('file').removeAttribute('aria-invalid');
+});
+
+$('startSend').addEventListener('click', () => startSend().catch((e) => {
+  $('fileError').textContent = e.message;
+}));
 $('stopSend').addEventListener('click', stopSend);
 
 // One-tap presets. Turbo trades per-frame QR error correction for payload — the
@@ -454,7 +472,7 @@ let _mixedBuild = false;
     const el = $('offlineStatus');
     if (el) {
       el.innerHTML =
-        `<span class="warn">Mixed build: page ${escapeHtml(htmlBuild)} but script ${BUILD} — ` +
+        `<span class="warn">Mixed build: page ${escapeHtml(htmlBuild)} but script ${escapeHtml(BUILD)} — ` +
         `some controls may not work.</span> `;
       const b = document.createElement('button');
       b.textContent = 'Fix now';

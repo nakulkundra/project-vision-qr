@@ -296,7 +296,8 @@
     <section id="send" class="panel active" role="tabpanel" aria-labelledby="tab-send">
       <div class="group">
         <label for="file">File to send <span style="text-transform:none;font-weight:500">(small files work best — under ~100 KB)</span></label>
-        <input type="file" id="file" />
+        <input type="file" id="file" aria-describedby="fileError" />
+        <div id="fileError" class="warn" role="alert" style="margin-top: var(--sp-2);"></div>
       </div>
 
       <div class="group">
