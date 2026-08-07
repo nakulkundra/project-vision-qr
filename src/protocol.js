@@ -20,14 +20,7 @@ const SHA_LEN = 32;
 // jsQR returns binaryData as an array of byte values, so a Latin-1 string is a
 // lossless carrier for raw bytes through the optical channel.
 export function bytesToLatin1(bytes) {
-  let s = '';
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-  return s;
-}
-export function latin1ToBytes(str) {
-  const out = new Uint8Array(str.length);
-  for (let i = 0; i < str.length; i++) out[i] = str.charCodeAt(i) & 0xff;
-  return out;
+  return Array.from(bytes, x => String.fromCharCode(x)).join('');
 }
 
 // --- integrity ----------------------------------------------------------------
@@ -35,18 +28,19 @@ export async function sha256(bytes) {
   const buf = await crypto.subtle.digest('SHA-256', bytes);
   return new Uint8Array(buf);
 }
+
 // ⚡ Bolt Optimization: Precomputed hex string lookup table.
 // Bypasses repetitive toString(16) and string padding for every byte.
 // ~4x faster than original inline formatting during SHA-256 rendering.
-const byteToHex = new Array(256);
-for (let n = 0; n <= 0xff; ++n) {
-  byteToHex[n] = n.toString(16).padStart(2, '0');
+const HEX_TABLE = new Array(256);
+for (let n = 0; n <= 255; ++n) {
+  HEX_TABLE[n] = n.toString(16).padStart(2, '0');
 }
 
 export function toHex(bytes) {
   let s = '';
   for (let i = 0; i < bytes.length; ++i) {
-    s += byteToHex[bytes[i]];
+    s += HEX_TABLE[bytes[i]];
   }
   return s;
 }
@@ -107,32 +101,35 @@ export function buildData({ sessionId, seed, payload }) {
 }
 
 // --- frame parser -------------------------------------------------------------
+function parseMetaFrame(bytes, sessionId, o) {
+  if (bytes.length < o + 2 + 2 + 4 + SHA_LEN + 1) return null;
+  const K = (bytes[o] << 8) | bytes[o + 1]; o += 2;
+  const blockSize = (bytes[o] << 8) | bytes[o + 1]; o += 2;
+  const fileSize = ((bytes[o] << 24) | (bytes[o + 1] << 16) | (bytes[o + 2] << 8) | bytes[o + 3]) >>> 0; o += 4;
+  const hash = bytes.slice(o, o + SHA_LEN); o += SHA_LEN;
+  const nameLen = bytes[o++];
+  if (bytes.length < o + nameLen) return null;
+  const filename = new TextDecoder().decode(bytes.slice(o, o + nameLen));
+  return { type: TYPE_META, sessionId, K, blockSize, fileSize, sha256: hash, filename };
+}
+
+function parseDataFrame(bytes, sessionId, o) {
+  if (bytes.length < o + 4) return null;
+  const seed = ((bytes[o] << 24) | (bytes[o + 1] << 16) | (bytes[o + 2] << 8) | bytes[o + 3]) >>> 0; o += 4;
+  const payload = bytes.slice(o);
+  return { type: TYPE_DATA, sessionId, seed, payload };
+}
+
 // Returns a typed object, or null if the bytes aren't a valid frame.
 export function parseFrame(bytes) {
   if (!bytes || bytes.length < HEADER_LEN) return null;
   if (bytes[0] !== MAGIC || bytes[1] !== VERSION) return null;
   const sessionId = (bytes[2] << 8) | bytes[3];
   const type = bytes[4];
-  let o = HEADER_LEN;
+  const o = HEADER_LEN;
 
-  if (type === TYPE_META) {
-    if (bytes.length < HEADER_LEN + 2 + 2 + 4 + SHA_LEN + 1) return null;
-    const K = (bytes[o] << 8) | bytes[o + 1]; o += 2;
-    const blockSize = (bytes[o] << 8) | bytes[o + 1]; o += 2;
-    const fileSize = ((bytes[o] << 24) | (bytes[o + 1] << 16) | (bytes[o + 2] << 8) | bytes[o + 3]) >>> 0; o += 4;
-    const hash = bytes.slice(o, o + SHA_LEN); o += SHA_LEN;
-    const nameLen = bytes[o++];
-    if (bytes.length < o + nameLen) return null;
-    const filename = new TextDecoder().decode(bytes.slice(o, o + nameLen));
-    return { type, sessionId, K, blockSize, fileSize, sha256: hash, filename };
-  }
-
-  if (type === TYPE_DATA) {
-    if (bytes.length < HEADER_LEN + 4) return null;
-    const seed = ((bytes[o] << 24) | (bytes[o + 1] << 16) | (bytes[o + 2] << 8) | bytes[o + 3]) >>> 0; o += 4;
-    const payload = bytes.slice(o);
-    return { type, sessionId, seed, payload };
-  }
+  if (type === TYPE_META) return parseMetaFrame(bytes, sessionId, o);
+  if (type === TYPE_DATA) return parseDataFrame(bytes, sessionId, o);
 
   return null;
 }
