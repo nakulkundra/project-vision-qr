@@ -1,9 +1,8 @@
-import { decodeScanned, encodeBase45, isFrameShaped } from '../src/transport.js';
+import { decodeScanned, encodeBase45, isFrameShaped, decodeBase45 } from '../src/transport.js';
 import { buildMeta, buildData, parseFrame, bytesToLatin1 } from '../src/protocol.js';
 import { Receiver } from '../src/receiver.js';
 import { Sender } from '../src/sender.js';
-import { LTDecoder, robustSolitonCDF } from '../src/fountain.js';
-import { makeRNG } from '../src/fountain.js';
+import { LTDecoder, robustSolitonCDF, makeRNG } from '../src/fountain.js';
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra='') => { if (cond) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
@@ -18,6 +17,10 @@ ok('legacy latin1 frame accepted', isFrameShaped(decodeScanned(l1)));
 // A corrupted header (what a mangling scanner produces) must NOT count as decoded
 const corrupt = encodeBase45(meta); const mangled = 'Z' + corrupt.slice(1);
 ok('corrupted header rejected', decodeScanned(mangled) === null);
+
+// ---- FIX 4: decodeBase45 must fail on out-of-alphabet characters ----
+ok('decodeBase45 rejects out-of-alphabet characters', decodeBase45('abc') === null);
+ok('decodeBase45 rejects mixed invalid characters', decodeBase45('012abc') === null);
 
 // ---- FIX 2: receiver recovers when the sender restarts (e.g. a preset tap) ----
 // Two paths must both work: re-lock immediately when nothing is at risk, and
