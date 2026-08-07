@@ -153,5 +153,28 @@ ok('bytesToLatin1 maps high-byte values correctly', bytesToLatin1(new Uint8Array
   ok('robustSolitonCDF(1) returns [0, 1]', cdf.length === 2 && cdf[0] === 0 && cdf[1] === 1, `actual=[${cdf}]`);
 }
 
+// ---- FIX 4: robustSolitonCDF unit tests ----
+{
+  const cdf0 = robustSolitonCDF(0);
+  ok('robustSolitonCDF(0) returns [0, 1]', cdf0.length === 2 && cdf0[0] === 0 && cdf0[1] === 1);
+  const cdf1 = robustSolitonCDF(1);
+  ok('robustSolitonCDF(1) returns [0, 1]', cdf1.length === 2 && cdf1[0] === 0 && cdf1[1] === 1);
+
+  const K = 10;
+  const cdf10 = robustSolitonCDF(K);
+  ok('robustSolitonCDF length is K + 1', cdf10.length === K + 1);
+  ok('robustSolitonCDF starts at 0', cdf10[0] === 0);
+  ok('robustSolitonCDF exactly terminates at 1', cdf10[K] === 1);
+
+  let isMonotonic = true;
+  let allInRange = true;
+  for (let i = 1; i <= K; i++) {
+    if (cdf10[i] < cdf10[i-1]) isMonotonic = false;
+    if (cdf10[i] < 0 || cdf10[i] > 1) allInRange = false;
+  }
+  ok('robustSolitonCDF elements are monotonically increasing', isMonotonic);
+  ok('robustSolitonCDF elements are bounded in [0, 1]', allInRange);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
