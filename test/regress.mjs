@@ -147,5 +147,11 @@ ok('bytesToLatin1 maps high-byte values correctly', bytesToLatin1(new Uint8Array
   ok('empty bytes block has correct size', blocks[0].length === 64, `size=${blocks[0].length}`);
 }
 
+// ---- robustSolitonCDF edge case K=1 ----
+{
+  const cdf = robustSolitonCDF(1);
+  ok('robustSolitonCDF(1) returns [0, 1]', cdf.length === 2 && cdf[0] === 0 && cdf[1] === 1, `actual=[${cdf}]`);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
