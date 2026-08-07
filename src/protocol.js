@@ -21,10 +21,7 @@ const SHA_LEN = 32;
 // lossless carrier for raw bytes through the optical channel.
 export function bytesToLatin1(bytes) {
   let s = '';
-  // Process in chunks to avoid "Maximum call stack size exceeded"
-  for (let i = 0; i < bytes.length; i += 4096) {
-    s += String.fromCharCode.apply(null, bytes.subarray(i, i + 4096));
-  }
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
   return s;
 }
 export function latin1ToBytes(str) {
