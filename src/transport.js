@@ -17,17 +17,27 @@ const CHAR_TO_VAL = (() => {
   return m;
 })();
 
+const ENCODE_LUT = (() => {
+  const lut = new Array(65536);
+  for (let i = 0; i < 65536; i++) {
+    let n = i;
+    let m1 = n % 45; n = (n - m1) / 45;
+    let m2 = n % 45; n = (n - m2) / 45;
+    lut[i] = ALPHABET[m1] + ALPHABET[m2] + ALPHABET[n];
+  }
+  return lut;
+})();
+
 // Encode bytes -> base45 string.
+// Optimized with a precomputed lookup table, avoiding math in the hot loop.
 export function encodeBase45(bytes) {
   let out = '';
   let i = 0;
-  for (; i + 1 < bytes.length; i += 2) {
-    let n = bytes[i] * 256 + bytes[i + 1]; // 0..65535 -> exactly 3 symbols
-    let m1 = n % 45; n = (n - m1) / 45;
-    let m2 = n % 45; n = (n - m2) / 45;
-    out += ALPHABET[m1] + ALPHABET[m2] + ALPHABET[n];
+  const len = bytes.length;
+  for (; i + 1 < len; i += 2) {
+    out += ENCODE_LUT[(bytes[i] << 8) | bytes[i + 1]];
   }
-  if (i < bytes.length) {
+  if (i < len) {
     let n = bytes[i]; // single trailing byte -> 2 symbols
     let m = n % 45; n = (n - m) / 45;
     out += ALPHABET[m] + ALPHABET[n];
@@ -68,8 +78,12 @@ export function decodeBase45(str) {
   if (str == null) return null;
   const n = str.length;
   if (n % 3 === 1) return null; // impossible base45 length
-  const out = [];
-  let i = 0;
+
+  // Pre-calculate exact byte length to avoid dynamic array resizing.
+  const byteLen = Math.floor(n / 3) * 2 + (n % 3 === 2 ? 1 : 0);
+  const out = new Uint8Array(byteLen);
+
+  let i = 0, j = 0;
   for (; i + 2 < n; i += 3) {
     const a = CHAR_TO_VAL[str.charCodeAt(i)] ?? -1;
     const b = CHAR_TO_VAL[str.charCodeAt(i + 1)] ?? -1;
@@ -77,7 +91,8 @@ export function decodeBase45(str) {
     if (a < 0 || b < 0 || c < 0) return null;
     const v = a + b * 45 + c * 45 * 45;
     if (v > 0xffff) return null;
-    out.push((v >> 8) & 0xff, v & 0xff);
+    out[j++] = (v >> 8) & 0xff;
+    out[j++] = v & 0xff;
   }
   if (i < n) { // trailing pair -> 1 byte
     const a = CHAR_TO_VAL[str.charCodeAt(i)] ?? -1;
@@ -85,7 +100,7 @@ export function decodeBase45(str) {
     if (a < 0 || b < 0) return null;
     const v = a + b * 45;
     if (v > 0xff) return null;
-    out.push(v);
+    out[j++] = v;
   }
-  return Uint8Array.from(out);
+  return out;
 }
