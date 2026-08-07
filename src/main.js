@@ -371,8 +371,9 @@ $('forceUpdate')?.addEventListener('click', hardRefresh);
   if (htmlBuild && htmlBuild !== BUILD) {
     const el = $('offlineStatus');
     if (el) {
+      // 🔒 XSS Fix: Properly escape the BUILD constant before inserting into HTML
       el.innerHTML =
-        `<span class="warn">Mixed build: page ${escapeHtml(htmlBuild)} but script ${BUILD} — ` +
+        `<span class="warn">Mixed build: page ${escapeHtml(htmlBuild)} but script ${escapeHtml(BUILD)} — ` +
         `some controls may not work.</span> `;
       const b = document.createElement('button');
       b.textContent = 'Fix now';

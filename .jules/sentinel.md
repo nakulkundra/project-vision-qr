@@ -1,0 +1,4 @@
+## 2026-08-07 - Unescaped Output in DOM (XSS)
+**Vulnerability:** The `BUILD` variable in `src/main.js` was unescaped when interpolated into an HTML string assigned via `innerHTML`.
+**Learning:** Even internal variables or seemingly safe constants (like a build version string) can become vectors for Cross-Site Scripting (XSS) if they are interpolated into `innerHTML` without proper HTML escaping. While the exploitability might be low if the variable is hardcoded or internally controlled, it violates defense-in-depth principles.
+**Prevention:** Always use appropriate escaping functions (like `escapeHtml()`) when inserting any dynamic data, regardless of its source, into `innerHTML`. Alternatively, prefer setting `textContent` or using DOM manipulation methods (e.g., `document.createElement`) which are inherently immune to XSS.
