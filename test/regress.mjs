@@ -2,6 +2,7 @@ import { decodeScanned, encodeBase45, isFrameShaped } from '../src/transport.js'
 import { buildMeta, buildData, parseFrame } from '../src/protocol.js';
 import { Receiver } from '../src/receiver.js';
 import { Sender } from '../src/sender.js';
+import { Scanner } from '../src/qr.js';
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra='') => { if (cond) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
@@ -71,5 +72,20 @@ async function restartScenario(feedUntilProgress) {
   ok('onDone fired exactly once', calls === 1, `calls=${calls} buffered=${bufferedCount}`);
   ok('buffered flush still verifies', !!(rx.result && rx.result.verified));
 }
+
+// ---- Scanner Fallback Test: native scanVideo fallback on error ----
+{
+  const scanner = new Scanner();
+  scanner.mode = 'native';
+  scanner.detector = {
+    detect: async () => { throw new Error('Simulated detect error'); }
+  };
+  const video = { videoWidth: 0, videoHeight: 0 };
+
+  await scanner.scanVideo(video);
+
+  ok('scanner fell back on native detect error', scanner.autoFellBack === true && scanner.mode === 'jsqr', `autoFellBack=${scanner.autoFellBack} mode=${scanner.mode}`);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
