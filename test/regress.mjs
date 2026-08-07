@@ -193,5 +193,19 @@ ok('bytesToLatin1 maps high-byte values correctly', bytesToLatin1(new Uint8Array
   global.window = origWindow;
 }
 
+// ---- Scanner Fallback Test: native scanVideo fallback on error ----
+{
+  const scanner = new Scanner();
+  scanner.mode = 'native';
+  scanner.detector = {
+    detect: async () => { throw new Error('Simulated detect error'); }
+  };
+  const video = { videoWidth: 0, videoHeight: 0 };
+
+  await scanner.scanVideo(video);
+
+  ok('scanner fell back on native detect error', scanner.autoFellBack === true && scanner.mode === 'jsqr', `autoFellBack=${scanner.autoFellBack} mode=${scanner.mode}`);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
