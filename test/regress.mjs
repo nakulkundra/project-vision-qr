@@ -1,5 +1,5 @@
 import { decodeScanned, encodeBase45, isFrameShaped, decodeBase45 } from '../src/transport.js';
-import { buildMeta, buildData, parseFrame, bytesToLatin1 } from '../src/protocol.js';
+import { buildMeta, buildData, parseFrame, bytesToLatin1, splitIntoBlocks } from '../src/protocol.js';
 import { Receiver } from '../src/receiver.js';
 import { Sender } from '../src/sender.js';
 import { LTDecoder, robustSolitonCDF, makeRNG } from '../src/fountain.js';
@@ -136,6 +136,15 @@ ok('bytesToLatin1 maps high-byte values correctly', bytesToLatin1(new Uint8Array
 
   ok('makeRNG treats -1 and 0xFFFFFFFF as equivalent',
      r_neg_seq.every((val, i) => val === r_max_seq[i]));
+}
+
+// ---- FIX 4: splitIntoBlocks with empty bytes ----
+{
+  const empty = new Uint8Array(0);
+  const blocks = splitIntoBlocks(empty, 64);
+  ok('empty bytes produces one block', blocks.length === 1, `length=${blocks.length}`);
+  ok('empty bytes block is zero-filled', blocks[0].every(b => b === 0), `not zero-filled`);
+  ok('empty bytes block has correct size', blocks[0].length === 64, `size=${blocks[0].length}`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
