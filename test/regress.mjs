@@ -2,6 +2,7 @@ import { decodeScanned, encodeBase45, isFrameShaped } from '../src/transport.js'
 import { buildMeta, buildData, parseFrame } from '../src/protocol.js';
 import { Receiver } from '../src/receiver.js';
 import { Sender } from '../src/sender.js';
+import { makeRNG } from '../src/fountain.js';
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra='') => { if (cond) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
@@ -71,5 +72,37 @@ async function restartScenario(feedUntilProgress) {
   ok('onDone fired exactly once', calls === 1, `calls=${calls} buffered=${bufferedCount}`);
   ok('buffered flush still verifies', !!(rx.result && rx.result.verified));
 }
+
+// ---- FIX 4: makeRNG tests (deterministic PRNG for fountain codec) ----
+{
+  const r1 = makeRNG(12345);
+  const r1_seq = [r1(), r1(), r1()];
+
+  const r2 = makeRNG(12345);
+  const r2_seq = [r2(), r2(), r2()];
+
+  ok('makeRNG is deterministic for same seed',
+     r1_seq.every((val, i) => val === r2_seq[i]));
+
+  const r3 = makeRNG(54321);
+  const r3_seq = [r3(), r3(), r3()];
+
+  ok('makeRNG produces different sequence for different seed',
+     !r1_seq.every((val, i) => val === r3_seq[i]));
+
+  const r_zero = makeRNG(0);
+  const r_zero_seq = [r_zero(), r_zero()];
+  ok('makeRNG handles seed 0', r_zero_seq.every(val => typeof val === 'number' && val >= 0 && val < 1));
+
+  const r_neg = makeRNG(-1);
+  const r_neg_seq = [r_neg(), r_neg()];
+
+  const r_max = makeRNG(0xFFFFFFFF);
+  const r_max_seq = [r_max(), r_max()];
+
+  ok('makeRNG treats -1 and 0xFFFFFFFF as equivalent',
+     r_neg_seq.every((val, i) => val === r_max_seq[i]));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
