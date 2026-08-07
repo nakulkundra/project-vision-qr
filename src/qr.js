@@ -49,6 +49,7 @@ export function versionForPayload(payloadBytes, ecc = 'M') {
 
 // Scratch canvas for one-pixel-per-module rendering, reused across frames.
 let _tiny = null;
+let _img = null;
 
 // Render frame bytes as a QR onto a canvas, sizing modules to (roughly) fill maxPx.
 //
@@ -67,7 +68,10 @@ export function renderToCanvas(canvas, bytes, { ecc = 'M', maxPx = 512, margin =
   if (!_tiny) _tiny = document.createElement('canvas');
   if (_tiny.width !== total || _tiny.height !== total) { _tiny.width = total; _tiny.height = total; }
   const tctx = _tiny.getContext('2d', { willReadFrequently: true });
-  const img = tctx.createImageData(total, total);
+  if (!_img || _img.width !== total || _img.height !== total) {
+    _img = tctx.createImageData(total, total);
+  }
+  const img = _img;
   const px = img.data;
   px.fill(255); // white, opaque (alpha included)
   for (let r = 0; r < count; r++) {
