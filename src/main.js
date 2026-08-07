@@ -127,6 +127,7 @@ async function startSend() {
 
     sendTimer = setInterval(tick, Math.round(1000 / fps));
     $('stopSend').disabled = false;
+    $('stopSend').focus();
     syncWakeLock();
   } catch (e) {
     startBtn.disabled = false;
@@ -141,6 +142,7 @@ function stopSend() {
   if (sendTimer) clearInterval(sendTimer);
   sendTimer = null;
   $('startSend').disabled = false;
+  $('startSend').focus();
   $('stopSend').disabled = true;
   syncWakeLock();
 }
@@ -240,6 +242,7 @@ async function startRecv() {
     scanning = true;
     _scanFrames = 0; _scanFpsAt = performance.now(); scanFps = 0; _rxStart = 0;
     $('stopRecv').disabled = false;
+    $('stopRecv').focus();
     $('recvResult').innerHTML = '';
     $('recvStat').textContent =
       `Scanning (${scanner.mode === 'native' ? 'native BarcodeDetector' : 'jsQR'})… point at the sender screen.`;
@@ -356,7 +359,8 @@ function onDone(result) {
   $('recvResult').innerHTML =
     `<div class="result ${cls}"><div><b>${badge}</b></div>` +
     `<div class="stat">${escapeHtml(result.filename || 'file')} · ${result.bytes.length} bytes</div>` +
-    `<a class="download" href="${url}" download="${escapeAttr(result.filename || 'received.bin')}">Download file</a></div>`;
+    `<a class="download" id="downloadFile" href="${url}" download="${escapeAttr(result.filename || 'received.bin')}">Download file</a></div>`;
+  $('downloadFile').focus();
   $('recvStat').textContent = 'Transfer complete.';
 }
 
@@ -375,6 +379,7 @@ function stopRecv() {
   stopStream();
   syncWakeLock();
   $('startRecv').disabled = false;
+  $('startRecv').focus();
   $('stopRecv').disabled = true;
   $('recvStat').textContent = 'Camera stopped.';
 }
