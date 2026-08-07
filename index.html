@@ -15,7 +15,7 @@
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <style>
-    /* ── Build v8 theme — deep teal ────────────────────────────────────────
+    /* ── Build v9 theme — deep teal ────────────────────────────────────────
        The background colour is deliberately distinct per build so you can tell
        at a glance, on BOTH devices, which version is running. See #buildBadge.
 
@@ -24,6 +24,7 @@
        those would cost decode reliability. Keep it pure black on white.
     ------------------------------------------------------------------------ */
     :root {
+      color-scheme: dark; /* dark native select / spinner / file-picker chrome */
       --bg:      #06231f;
       --bg-2:    #072a25;
       --panel:   #0c332d;
@@ -36,8 +37,19 @@
       --on-accent:#04211c;
       --ok:      #46d39a;
       --bad:     #ff8f9f;
-      --border:  #175b50;
-      --border-2:#1e6f61;
+      /* Borders are the ONLY boundary of inputs, presets, secondary buttons,
+         the progress track, the video and the tab strip, so they are UI
+         components under WCAG SC 1.4.11 and need >=3:1 against the surfaces
+         they sit on. The previous values (#175b50 / #1e6f61) measured
+         1.56-2.29:1 — invisible to low-vision users. */
+      --border:  #2e9080;
+      --border-2:#3aa892;
+      /* Secondary buttons must not share a colour with the panel gradient:
+         --panel-2 made "Stop" byte-identical to the panel top (1.00:1), so the
+         control had no perceivable surface at all. --sunken separates best of
+         the candidates measured (1.47:1 vs the panel top, 17.4:1 for its text)
+         and matches the inputs and tab strip. */
+      --surface-2:#041916;
 
       --r-sm: 8px;
       --r-md: 12px;
@@ -46,7 +58,7 @@
       --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;
       --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
       --shadow: 0 8px 24px rgba(0,0,0,.35);
-      --ring: 0 0 0 3px rgba(47,215,162,.45);
+      --ring: 0 0 0 3px #06231f, 0 0 0 6px #7ff0cd;
     }
 
     * { box-sizing: border-box; }
@@ -70,7 +82,10 @@
     header {
       display: flex; align-items: flex-start; justify-content: space-between;
       gap: var(--sp-4);
-      padding: calc(var(--sp-4) + env(safe-area-inset-top)) var(--sp-4) var(--sp-4);
+      padding: calc(var(--sp-4) + env(safe-area-inset-top))
+               calc(var(--sp-4) + env(safe-area-inset-right))
+               var(--sp-4)
+               calc(var(--sp-4) + env(safe-area-inset-left));
       max-width: 760px; margin: 0 auto;
       border-bottom: 1px solid var(--border);
     }
@@ -102,17 +117,27 @@
     .action:hover:not(:disabled) { filter: brightness(1.07); }
     .action:active:not(:disabled) { transform: translateY(1px); }
     .action.secondary {
-      background: var(--panel-2); color: var(--fg); border-color: var(--border-2);
+      background: var(--surface-2); color: var(--fg); border-color: var(--border-2);
     }
-    .action.secondary:hover:not(:disabled) { background: #14453c; filter: none; }
+    .action.secondary:hover:not(:disabled) { background: #0a2b26; filter: none; }
     button:disabled { opacity: .45; cursor: not-allowed; }
     .action.compact { width: auto; padding: 8px 12px; font-size: 13px; white-space: nowrap; }
     .btn-row { display: flex; gap: var(--sp-3); margin-top: var(--sp-4); }
     .btn-row .action { margin-top: 0; }
-    :focus-visible { outline: none; box-shadow: var(--ring); border-radius: var(--r-sm); }
+    :focus-visible { outline: 2px solid transparent; outline-offset: 2px; box-shadow: var(--ring); border-radius: var(--r-sm); }
+    /* Windows High Contrast / forced-colors strips box-shadow, so restore a
+       real outline there — otherwise keyboard focus becomes invisible. */
+    @media (forced-colors: active) {
+      :focus-visible { outline: 3px solid Highlight; box-shadow: none; }
+      .tabs button.active, .preset[aria-pressed="true"] { forced-color-adjust: none; }
+    }
 
     /* ── Layout / tabs ──────────────────────────────────────────────────── */
-    main { max-width: 760px; margin: 0 auto; padding: var(--sp-4); }
+    main {
+      max-width: 760px; margin: 0 auto;
+      padding: var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-right))
+               var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-left));
+    }
     .tabs {
       display: flex; gap: var(--sp-1); margin-bottom: var(--sp-4);
       background: var(--sunken); border: 1px solid var(--border);
@@ -244,12 +269,12 @@
     }
   </style>
 </head>
-<body data-build="v8">
+<body data-build="v9">
   <header>
     <div class="brand">
       <img src="icons/icon-192.png" alt="" width="44" height="44" />
       <div class="brand-text">
-        <h1>Project Vision <span id="buildBadge">BUILD v8 · polish</span></h1>
+        <h1>Project Vision <span id="buildBadge">BUILD v9 · a11y</span></h1>
         <p class="tagline">Send a file device-to-device with no network — as a stream of animated QR codes.</p>
         <p id="offlineStatus" class="stat" role="status"></p>
       </div>
@@ -262,9 +287,9 @@
 
   <main>
     <div class="tabs" role="tablist" aria-label="Mode">
-      <button data-tab="send" class="active" role="tab" aria-selected="true" aria-controls="send" id="tab-send">Send</button>
-      <button data-tab="receive" role="tab" aria-selected="false" aria-controls="receive" id="tab-receive">Receive</button>
-      <button data-tab="test" role="tab" aria-selected="false" aria-controls="test" id="tab-test">Self-test</button>
+      <button data-tab="send" class="active" role="tab" aria-selected="true" aria-controls="send" id="tab-send" tabindex="0">Send</button>
+      <button data-tab="receive" role="tab" aria-selected="false" aria-controls="receive" id="tab-receive" tabindex="-1">Receive</button>
+      <button data-tab="test" role="tab" aria-selected="false" aria-controls="test" id="tab-test" tabindex="-1">Self-test</button>
     </div>
 
     <!-- SEND -->
@@ -317,8 +342,8 @@
         <button class="action secondary" id="stopRecv" disabled>Stop camera</button>
       </div>
       <video id="video" playsinline muted aria-label="Camera preview"></video>
-      <div class="stat" id="recvStat" role="status" aria-live="polite">Idle.</div>
-      <div class="bar" role="progressbar" aria-labelledby="recvStat" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="recvBarWrap"><div id="recvBar"></div></div>
+      <div class="stat" id="recvStat" role="status" aria-live="polite" aria-atomic="true">Idle.</div>
+      <div class="bar" role="progressbar" aria-label="Transfer progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="recvBarWrap"><div id="recvBar"></div></div>
       <div id="recvResult"></div>
       <p class="hint" id="recvHint">The camera needs a secure context (HTTPS or localhost). If it won't start, see the README.</p>
     </section>

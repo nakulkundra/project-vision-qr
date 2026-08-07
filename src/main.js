@@ -4,7 +4,7 @@
 // and main.js are fetched separately, so a stale cache can pair fresh HTML with
 // stale JS — which looks like "the buttons are visible but do nothing". When the
 // stamps disagree we say so and offer a one-tap hard refresh.
-export const BUILD = 'v8';
+export const BUILD = 'v9';
 
 import { Sender } from './sender.js';
 import { Receiver } from './receiver.js';
@@ -15,16 +15,32 @@ import { codecLoopback, opticalLoopback } from './selftest.js';
 const $ = (id) => document.getElementById(id);
 
 // --- tab switching ------------------------------------------------------------
-document.querySelectorAll('.tabs button').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tabs button').forEach((b) => {
-      b.classList.remove('active');
-      b.setAttribute('aria-selected', 'false');
-    });
-    document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
-    btn.classList.add('active');
-    btn.setAttribute('aria-selected', 'true');
-    $(btn.dataset.tab).classList.add('active');
+const tabButtons = [...document.querySelectorAll('.tabs button')];
+
+function selectTab(btn, focus = false) {
+  for (const b of tabButtons) {
+    const on = b === btn;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', String(on));
+    // Roving tabindex: only the selected tab is in the tab order, which is what
+    // role="tab" requires — arrow keys move between tabs, Tab leaves the strip.
+    b.setAttribute('tabindex', on ? '0' : '-1');
+  }
+  document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+  $(btn.dataset.tab).classList.add('active');
+  if (focus) btn.focus();
+}
+
+tabButtons.forEach((btn, i) => {
+  btn.addEventListener('click', () => selectTab(btn));
+  btn.addEventListener('keydown', (e) => {
+    const last = tabButtons.length - 1;
+    let target = null;
+    if (e.key === 'ArrowRight') target = tabButtons[i === last ? 0 : i + 1];
+    else if (e.key === 'ArrowLeft') target = tabButtons[i === 0 ? last : i - 1];
+    else if (e.key === 'Home') target = tabButtons[0];
+    else if (e.key === 'End') target = tabButtons[last];
+    if (target) { e.preventDefault(); selectTab(target, true); }
   });
 });
 
@@ -101,6 +117,7 @@ async function startSend() {
 
     sendTimer = setInterval(tick, Math.round(1000 / fps));
     $('stopSend').disabled = false;
+    syncWakeLock();
   } catch (e) {
     startBtn.disabled = false;
     throw e;
@@ -115,6 +132,7 @@ function stopSend() {
   sendTimer = null;
   $('startSend').disabled = false;
   $('stopSend').disabled = true;
+  syncWakeLock();
 }
 
 $('startSend').addEventListener('click', () => startSend().catch((e) => alert(e.message)));
@@ -181,6 +199,8 @@ async function startRecv() {
       $('recvHint').innerHTML =
         `<span class="warn">Camera blocked:</span> ${escapeHtml(e.message)}. ` +
         `A camera requires HTTPS or localhost — see the README.`;
+      // recvHint is not a live region, so mirror the failure into one that is.
+      $('recvStat').textContent = `Camera could not start: ${e.message}`;
       return;
     }
     const video = $('video');
@@ -204,6 +224,7 @@ async function startRecv() {
       `Scanning (${scanner.mode === 'native' ? 'native BarcodeDetector' : 'jsQR'})… point at the sender screen.`;
     scanLoop();
     startScanWatchdog();
+    syncWakeLock();
   } finally {
     startBtn.textContent = originalText;
     if (!scanning) startBtn.disabled = false;
@@ -301,6 +322,7 @@ function onDone(result) {
   scanning = false;
   clearScanWatchdog();
   stopStream();
+  syncWakeLock();
   $('startRecv').disabled = false;
   $('stopRecv').disabled = true;
   $('recvBar').style.width = '100%';
@@ -330,6 +352,7 @@ function stopRecv() {
   scanning = false;
   clearScanWatchdog();
   stopStream();
+  syncWakeLock();
   $('startRecv').disabled = false;
   $('stopRecv').disabled = true;
   $('recvStat').textContent = 'Camera stopped.';
@@ -372,6 +395,41 @@ $('runOptical').addEventListener('click', async () => {
   }
 });
 
+// ============================== SCREEN WAKE LOCK ==============================
+// Neither device is touched during a transfer, so the sender's screen dims and
+// sleeps and the QR stream stops. Hold a wake lock while sending or receiving.
+// The API drops the lock whenever the page is hidden, so re-acquire on
+// visibilitychange. Unsupported browsers (notably iOS < 16.4) just no-op.
+let _wakeLock = null;
+let _wakeWanted = false;
+
+async function acquireWakeLock() {
+  _wakeWanted = true;
+  if (!('wakeLock' in navigator)) return;
+  if (_wakeLock) return;
+  try {
+    _wakeLock = await navigator.wakeLock.request('screen');
+    _wakeLock.addEventListener('release', () => { _wakeLock = null; });
+  } catch { /* denied (e.g. low battery) — transfer still works, screen may sleep */ }
+}
+
+async function releaseWakeLock() {
+  _wakeWanted = false;
+  try { await _wakeLock?.release(); } catch { /* already gone */ }
+  _wakeLock = null;
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && _wakeWanted) acquireWakeLock();
+});
+
+// True while either direction is active, so one side stopping does not release
+// a lock the other side still needs.
+function syncWakeLock() {
+  if (sendTimer || scanning) acquireWakeLock();
+  else releaseWakeLock();
+}
+
 // ============================== BUILD INTEGRITY ===============================
 // Nuke every cache + service worker and reload from the network. This is the
 // escape hatch when an installed PWA is stuck on stale code.
@@ -388,9 +446,11 @@ async function hardRefresh() {
 }
 $('forceUpdate')?.addEventListener('click', hardRefresh);
 
+let _mixedBuild = false;
 (function checkBuild() {
   const htmlBuild = document.body.dataset.build;
   if (htmlBuild && htmlBuild !== BUILD) {
+    _mixedBuild = true;
     const el = $('offlineStatus');
     if (el) {
       el.innerHTML =
@@ -428,6 +488,11 @@ if ('serviceWorker' in navigator) {
   });
 }
 function markOfflineReady() {
+  // Never clobber the mixed-build warning: the service worker registers on
+  // 'load', i.e. AFTER checkBuild() runs, so overwriting here used to delete
+  // the "Fix now" recovery button moments after it appeared — removing the one
+  // affordance that repairs the very state being reported.
+  if (_mixedBuild) return;
   const el = $('offlineStatus');
   if (el) el.innerHTML = '✓ Ready to work offline';
 }
