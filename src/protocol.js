@@ -24,11 +24,6 @@ export function bytesToLatin1(bytes) {
   for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
   return s;
 }
-export function latin1ToBytes(str) {
-  const out = new Uint8Array(str.length);
-  for (let i = 0; i < str.length; i++) out[i] = str.charCodeAt(i) & 0xff;
-  return out;
-}
 
 // --- integrity ----------------------------------------------------------------
 export async function sha256(bytes) {
