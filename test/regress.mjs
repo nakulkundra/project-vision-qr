@@ -1,5 +1,6 @@
 import { decodeScanned, encodeBase45, isFrameShaped } from '../src/transport.js';
 import { buildMeta, buildData, parseFrame } from '../src/protocol.js';
+import { robustSolitonCDF } from '../src/fountain.js';
 import { Receiver } from '../src/receiver.js';
 import { Sender } from '../src/sender.js';
 
@@ -71,5 +72,29 @@ async function restartScenario(feedUntilProgress) {
   ok('onDone fired exactly once', calls === 1, `calls=${calls} buffered=${bufferedCount}`);
   ok('buffered flush still verifies', !!(rx.result && rx.result.verified));
 }
+
+// ---- FIX 4: robustSolitonCDF unit tests ----
+{
+  const cdf0 = robustSolitonCDF(0);
+  ok('robustSolitonCDF(0) returns [0, 1]', cdf0.length === 2 && cdf0[0] === 0 && cdf0[1] === 1);
+  const cdf1 = robustSolitonCDF(1);
+  ok('robustSolitonCDF(1) returns [0, 1]', cdf1.length === 2 && cdf1[0] === 0 && cdf1[1] === 1);
+
+  const K = 10;
+  const cdf10 = robustSolitonCDF(K);
+  ok('robustSolitonCDF length is K + 1', cdf10.length === K + 1);
+  ok('robustSolitonCDF starts at 0', cdf10[0] === 0);
+  ok('robustSolitonCDF exactly terminates at 1', cdf10[K] === 1);
+
+  let isMonotonic = true;
+  let allInRange = true;
+  for (let i = 1; i <= K; i++) {
+    if (cdf10[i] < cdf10[i-1]) isMonotonic = false;
+    if (cdf10[i] < 0 || cdf10[i] > 1) allInRange = false;
+  }
+  ok('robustSolitonCDF elements are monotonically increasing', isMonotonic);
+  ok('robustSolitonCDF elements are bounded in [0, 1]', allInRange);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
