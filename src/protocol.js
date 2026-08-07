@@ -36,9 +36,7 @@ export async function sha256(bytes) {
   return new Uint8Array(buf);
 }
 export function toHex(bytes) {
-  let s = '';
-  for (const b of bytes) s += b.toString(16).padStart(2, '0');
-  return s;
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
 }
 export function bytesEqual(a, b) {
   if (a.length !== b.length) return false;
