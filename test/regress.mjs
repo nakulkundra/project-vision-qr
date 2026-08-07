@@ -2,6 +2,7 @@ import { decodeScanned, encodeBase45, isFrameShaped } from '../src/transport.js'
 import { buildMeta, buildData, parseFrame, bytesToLatin1 } from '../src/protocol.js';
 import { Receiver } from '../src/receiver.js';
 import { Sender } from '../src/sender.js';
+import { LTDecoder, robustSolitonCDF } from '../src/fountain.js';
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra='') => { if (cond) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
@@ -76,6 +77,12 @@ async function restartScenario(feedUntilProgress) {
 ok('bytesToLatin1 maps basic ASCII', bytesToLatin1(new Uint8Array([65, 66, 67])) === 'ABC');
 ok('bytesToLatin1 maps empty array', bytesToLatin1(new Uint8Array([])) === '');
 ok('bytesToLatin1 maps high-byte values correctly', bytesToLatin1(new Uint8Array([255, 128])) === '\xff\x80');
+// ---- FIX 4: LTDecoder.assemble with incomplete file ----
+{
+  const cdf = robustSolitonCDF(10);
+  const decoder = new LTDecoder(10, 128, cdf);
+  ok('LTDecoder.assemble() returns null for incomplete file', decoder.assemble() === null);
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
