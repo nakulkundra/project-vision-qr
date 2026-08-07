@@ -84,5 +84,21 @@ ok('bytesToLatin1 maps high-byte values correctly', bytesToLatin1(new Uint8Array
   ok('LTDecoder.assemble() returns null for incomplete file', decoder.assemble() === null);
 }
 
+// ---- parseFrame malformed input testing ----
+{
+  ok('parseFrame rejects null', parseFrame(null) === null);
+  ok('parseFrame rejects undefined', parseFrame(undefined) === null);
+  ok('parseFrame rejects short buffer', parseFrame(new Uint8Array([0x51, 1, 0, 0])) === null);
+
+  const validData = buildData({ sessionId: 0x1234, seed: 0, payload: new Uint8Array(10) });
+
+  const badMagic = new Uint8Array(validData);
+  badMagic[0] = 0x99;
+  ok('parseFrame rejects bad magic', parseFrame(badMagic) === null);
+
+  const badVersion = new Uint8Array(validData);
+  badVersion[1] = 0x99;
+  ok('parseFrame rejects bad version', parseFrame(badVersion) === null);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
