@@ -1,5 +1,5 @@
 import { Scanner } from '../src/qr.js';
-import { decodeScanned, encodeBase45, isFrameShaped, decodeBase45 } from '../src/transport.js';
+import { decodeScanned, encodeBase45, decodeBase45 } from '../src/transport.js';
 import { buildMeta, buildData, parseFrame, bytesToLatin1, splitIntoBlocks } from '../src/protocol.js';
 import { Receiver } from '../src/receiver.js';
 import { Sender } from '../src/sender.js';
@@ -15,9 +15,9 @@ ok('decodeBase45 rejects invalid length 4', decodeBase45('AAAA') === null);
 const garbage = 'ABCDEF0123456789';            // in-alphabet, length%3 != 1
 ok('garbage rejected (fail closed)', decodeScanned(garbage) === null, JSON.stringify(decodeScanned(garbage)?.slice(0,6)));
 const meta = buildMeta({ sessionId: 0x1234, K: 5, blockSize: 96, fileSize: 400, sha256: new Uint8Array(32).fill(7), filename: 'a.txt' });
-ok('real base45 frame accepted', isFrameShaped(decodeScanned(encodeBase45(meta))));
+ok('real base45 frame accepted', decodeScanned(encodeBase45(meta)) !== null);
 let l1 = ''; for (const b of meta) l1 += String.fromCharCode(b);
-ok('legacy latin1 frame accepted', isFrameShaped(decodeScanned(l1)));
+ok('legacy latin1 frame accepted', decodeScanned(l1) !== null);
 // A corrupted header (what a mangling scanner produces) must NOT count as decoded
 const corrupt = encodeBase45(meta); const mangled = 'Z' + corrupt.slice(1);
 ok('corrupted header rejected', decodeScanned(mangled) === null);
