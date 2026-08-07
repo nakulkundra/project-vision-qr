@@ -23,14 +23,14 @@ export function encodeBase45(bytes) {
   let i = 0;
   for (; i + 1 < bytes.length; i += 2) {
     let n = bytes[i] * 256 + bytes[i + 1]; // 0..65535 -> exactly 3 symbols
-    out += ALPHABET[n % 45]; n = (n - (n % 45)) / 45;
-    out += ALPHABET[n % 45]; n = (n - (n % 45)) / 45;
-    out += ALPHABET[n % 45];
+    let m1 = n % 45; n = (n - m1) / 45;
+    let m2 = n % 45; n = (n - m2) / 45;
+    out += ALPHABET[m1] + ALPHABET[m2] + ALPHABET[n];
   }
   if (i < bytes.length) {
     let n = bytes[i]; // single trailing byte -> 2 symbols
-    out += ALPHABET[n % 45]; n = (n - (n % 45)) / 45;
-    out += ALPHABET[n % 45];
+    let m = n % 45; n = (n - m) / 45;
+    out += ALPHABET[m] + ALPHABET[n];
   }
   return out;
 }

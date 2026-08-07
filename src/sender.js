@@ -24,6 +24,17 @@ export class Sender {
   async init() {
     const blocks = splitIntoBlocks(this.fileBytes, this.blockSize);
     this.K = blocks.length;
+    // K travels as a u16 in the META frame, so >65535 blocks wraps silently and
+    // the receiver reassembles garbage that still "completes". Fail loudly
+    // instead. Reachable in practice: at blockSize 16 the ceiling is only 1 MB.
+    if (this.K > 0xffff) {
+      const maxBytes = 0xffff * this.blockSize;
+      throw new Error(
+        `File needs ${this.K} blocks but the format allows 65535. ` +
+        `At block size ${this.blockSize} the limit is ${(maxBytes / 1024 / 1024).toFixed(1)} MB — ` +
+        `use a larger block size or a smaller file.`
+      );
+    }
     this.cdf = robustSolitonCDF(this.K);
     this.encoder = new LTEncoder(blocks, this.cdf);
     this.hash = await sha256(this.fileBytes);
