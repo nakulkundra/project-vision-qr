@@ -16,14 +16,6 @@ const HEADER_LEN = 5; // magic, version, sessionId hi, sessionId lo, type
 const SHA_LEN = 32;
 
 // --- byte <-> latin1-string bridge -------------------------------------------
-// qrcode-generator's default Byte mode encodes str.charCodeAt(i) & 0xff, and
-// jsQR returns binaryData as an array of byte values, so a Latin-1 string is a
-// lossless carrier for raw bytes through the optical channel.
-export function bytesToLatin1(bytes) {
-  let s = '';
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-  return s;
-}
 export function latin1ToBytes(str) {
   const out = new Uint8Array(str.length);
   for (let i = 0; i < str.length; i++) out[i] = str.charCodeAt(i) & 0xff;
