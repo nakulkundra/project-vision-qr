@@ -127,13 +127,14 @@ async function startSend() {
 
     sendTimer = setInterval(tick, Math.round(1000 / fps));
     $('stopSend').disabled = false;
+    $('stopSend').focus();
     syncWakeLock();
   } catch (e) {
     startBtn.disabled = false;
     throw e;
   } finally {
     startBtn.textContent = originalText;
-    if (!scanning) startBtn.disabled = false;
+    if (!sendTimer) startBtn.disabled = false;
   }
 }
 
@@ -142,6 +143,7 @@ function stopSend() {
   sendTimer = null;
   $('startSend').disabled = false;
   $('stopSend').disabled = true;
+  $('startSend').focus();
   syncWakeLock();
 }
 
@@ -246,6 +248,7 @@ async function startRecv() {
     scanLoop();
     startScanWatchdog();
     syncWakeLock();
+    $('stopRecv').focus();
   } finally {
     startBtn.textContent = originalText;
     if (!scanning) startBtn.disabled = false;
@@ -346,6 +349,7 @@ function onDone(result) {
   syncWakeLock();
   $('startRecv').disabled = false;
   $('stopRecv').disabled = true;
+  $('startRecv').focus();
   $('recvBar').style.width = '100%';
   $('recvBarWrap')?.setAttribute('aria-valuenow', '100');
 
@@ -376,6 +380,7 @@ function stopRecv() {
   syncWakeLock();
   $('startRecv').disabled = false;
   $('stopRecv').disabled = true;
+  $('startRecv').focus();
   $('recvStat').textContent = 'Camera stopped.';
 }
 
