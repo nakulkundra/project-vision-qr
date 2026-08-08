@@ -1,0 +1,5 @@
+🚨 **Severity:** MEDIUM
+💡 **Vulnerability:** The application previously used `Math.random()` to generate the `sessionId` and initial fountain sequence `_seed`. `Math.random()` is not a cryptographically secure random number generator (CSRNG) and its outputs can be predictable.
+🎯 **Impact:** Using a predictable seed could allow a malicious observer or compromised network link to predict future stream parameters and inject rogue fountain packets that corrupt the file assembly or attempt to trigger vulnerabilities in the receiver's decoding logic.
+🔧 **Fix:** Replaced the `Math.random()` calls in `src/sender.js` with `crypto.getRandomValues()` to utilize the system's cryptographically secure PRNG. Included a feature-detection fallback to preserve backward compatibility for legacy environments that do not support the Web Crypto API, while explicitly preserving the structural layout of the generated values (e.g., lower 16 bits set to 0 for `_seed`).
+✅ **Verification:** Verified by ensuring the application passes its test suite (`pnpm test`), which heavily exercises the `Sender`'s stream generation and decoding paths.
