@@ -65,6 +65,7 @@ async function startSend() {
 
   const startBtn = $('startSend');
   const originalText = startBtn.textContent;
+  const wasFocused = document.activeElement === startBtn;
   startBtn.disabled = true;
   startBtn.textContent = 'Processing...';
 
@@ -127,6 +128,7 @@ async function startSend() {
 
     sendTimer = setInterval(tick, Math.round(1000 / fps));
     $('stopSend').disabled = false;
+    if (wasFocused) $('stopSend').focus();
     syncWakeLock();
   } catch (e) {
     startBtn.disabled = false;
@@ -138,10 +140,12 @@ async function startSend() {
 }
 
 function stopSend() {
+  const wasFocused = document.activeElement === $('stopSend');
   if (sendTimer) clearInterval(sendTimer);
   sendTimer = null;
   $('startSend').disabled = false;
   $('stopSend').disabled = true;
+  if (wasFocused) $('startSend').focus();
   syncWakeLock();
 }
 
@@ -195,6 +199,7 @@ let _scanArmedAt = 0, _scanWatchdog = null; // scan-loop stall watchdog
 async function startRecv() {
   const startBtn = $('startRecv');
   const originalText = startBtn.textContent;
+  const wasFocused = document.activeElement === startBtn;
   startBtn.disabled = true;
   startBtn.textContent = 'Starting...';
 
@@ -240,6 +245,7 @@ async function startRecv() {
     scanning = true;
     _scanFrames = 0; _scanFpsAt = performance.now(); scanFps = 0; _rxStart = 0;
     $('stopRecv').disabled = false;
+    if (wasFocused) $('stopRecv').focus();
     $('recvResult').innerHTML = '';
     $('recvStat').textContent =
       `Scanning (${scanner.mode === 'native' ? 'native BarcodeDetector' : 'jsQR'})… point at the sender screen.`;
@@ -358,6 +364,8 @@ function onDone(result) {
     `<div class="stat">${escapeHtml(result.filename || 'file')} · ${result.bytes.length} bytes</div>` +
     `<a class="download" href="${url}" download="${escapeAttr(result.filename || 'received.bin')}">Download file</a></div>`;
   $('recvStat').textContent = 'Transfer complete.';
+  const dl = $('recvResult').querySelector('.download');
+  if (dl) dl.focus();
 }
 
 function clearScanWatchdog() {
@@ -370,12 +378,14 @@ function stopStream() {
   stream = null;
 }
 function stopRecv() {
+  const wasFocused = document.activeElement === $('stopRecv');
   scanning = false;
   clearScanWatchdog();
   stopStream();
   syncWakeLock();
   $('startRecv').disabled = false;
   $('stopRecv').disabled = true;
+  if (wasFocused) $('startRecv').focus();
   $('recvStat').textContent = 'Camera stopped.';
 }
 
