@@ -1,3 +1,3 @@
-## 2024-05-18 - Async Loading States for Heavy UI Operations
-**Learning:** When interacting with files or hardware devices (like `file.arrayBuffer()` or `getUserMedia`), the promise resolution can block or delay significantly. Without immediate visual feedback, users may assume the app is frozen or spam the trigger button, leading to unexpected behaviors or race conditions.
-**Action:** Always wrap async initializations for hardware or file reading in a `try/finally` block that disables the trigger button and provides descriptive loading text (e.g., "Starting...", "Processing...") to confirm the system has registered the interaction.
+## 2026-08-12 - Focus Management Before Disabling Elements
+**Learning:** When disabling an actively focused interactive element (such as a 'Start' button) in vanilla JavaScript, setting `disabled = true` immediately causes the element to lose focus, dropping the browser focus back to `document.body`. This makes keyboard navigation extremely frustrating as the user has to tab from the top of the document again.
+**Action:** Explicitly evaluate `document.activeElement` and shift focus to the next logical control (e.g., a 'Stop' button) *before* setting `disabled = true` on the currently focused element.
