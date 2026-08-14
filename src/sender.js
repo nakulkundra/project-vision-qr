@@ -8,15 +8,26 @@
 import { LTEncoder, robustSolitonCDF } from './fountain.js';
 import { splitIntoBlocks, buildMeta, buildData, sha256 } from './protocol.js';
 
+// Helper to get a cryptographically secure 16-bit random integer.
+// SECURITY: Math.random() is predictable, allowing session spoofing/prediction.
+function randomU16() {
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const a = new Uint16Array(1);
+    crypto.getRandomValues(a);
+    return a[0];
+  }
+  return Math.floor(Math.random() * 0x10000) & 0xffff;
+}
+
 export class Sender {
   constructor(fileBytes, filename, opts = {}) {
     this.fileBytes = fileBytes;
     this.filename = filename;
     this.blockSize = opts.blockSize || 128;
     this.metaEvery = opts.metaEvery || 25; // one META per this many DATA frames
-    this.sessionId = opts.sessionId ?? (Math.floor(Math.random() * 0x10000) & 0xffff);
+    this.sessionId = opts.sessionId ?? randomU16();
 
-    this._seed = (Math.floor(Math.random() * 0x10000) << 16) >>> 0; // seed base
+    this._seed = (randomU16() << 16) >>> 0; // seed base
     this._dataCount = 0;
     this.ready = false;
   }
