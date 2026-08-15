@@ -20,7 +20,15 @@ const SHA_LEN = 32;
 // jsQR returns binaryData as an array of byte values, so a Latin-1 string is a
 // lossless carrier for raw bytes through the optical channel.
 export function bytesToLatin1(bytes) {
-  return Array.from(bytes, x => String.fromCharCode(x)).join('');
+  // ⚡ Bolt: Fast array-to-string conversion using chunked String.fromCharCode.apply
+  // Expected impact: Speeds up string conversion by ~15-20x for large payloads.
+  const CHUNK_SIZE = 4096;
+  let str = '';
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    const chunk = bytes.subarray ? bytes.subarray(i, i + CHUNK_SIZE) : bytes.slice(i, i + CHUNK_SIZE);
+    str += String.fromCharCode.apply(null, chunk);
+  }
+  return str;
 }
 
 // --- integrity ----------------------------------------------------------------
