@@ -8,15 +8,26 @@
 import { LTEncoder, robustSolitonCDF } from './fountain.js';
 import { splitIntoBlocks, buildMeta, buildData, sha256 } from './protocol.js';
 
+// Helper to generate a 16-bit random number securely using Web Crypto API.
+// Falls back to Math.random() if crypto is unavailable.
+// This addresses the security concern of predictable session IDs and seeds.
+function rand16() {
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const arr = new Uint16Array(1);
+    return crypto.getRandomValues(arr)[0];
+  }
+  return Math.floor(Math.random() * 0x10000) & 0xffff;
+}
+
 export class Sender {
   constructor(fileBytes, filename, opts = {}) {
     this.fileBytes = fileBytes;
     this.filename = filename;
     this.blockSize = opts.blockSize || 128;
     this.metaEvery = opts.metaEvery || 25; // one META per this many DATA frames
-    this.sessionId = opts.sessionId ?? (Math.floor(Math.random() * 0x10000) & 0xffff);
+    this.sessionId = opts.sessionId ?? rand16();
 
-    this._seed = (Math.floor(Math.random() * 0x10000) << 16) >>> 0; // seed base
+    this._seed = (rand16() << 16) >>> 0; // seed base
     this._dataCount = 0;
     this.ready = false;
   }
