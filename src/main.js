@@ -64,6 +64,7 @@ async function startSend() {
   const file = fileInput.files[0];
 
   const startBtn = $('startSend');
+  const wasFocused = document.activeElement === startBtn;
   const originalText = startBtn.textContent;
   startBtn.disabled = true;
   startBtn.textContent = 'Processing...';
@@ -127,21 +128,30 @@ async function startSend() {
 
     sendTimer = setInterval(tick, Math.round(1000 / fps));
     $('stopSend').disabled = false;
+    if (wasFocused) $('stopSend').focus();
     syncWakeLock();
   } catch (e) {
     startBtn.disabled = false;
+    if (wasFocused) startBtn.focus();
     throw e;
   } finally {
     startBtn.textContent = originalText;
-    if (!scanning) startBtn.disabled = false;
+    if (!scanning) {
+      startBtn.disabled = false;
+      // If it successfully started, focus has already shifted.
+      // This is mostly for fallback in case of errors not caught.
+    }
   }
 }
 
 function stopSend() {
   if (sendTimer) clearInterval(sendTimer);
   sendTimer = null;
+  const stopBtn = $('stopSend');
+  const wasFocused = document.activeElement === stopBtn;
   $('startSend').disabled = false;
-  $('stopSend').disabled = true;
+  if (wasFocused) $('startSend').focus();
+  stopBtn.disabled = true;
   syncWakeLock();
 }
 
@@ -194,6 +204,7 @@ let _scanArmedAt = 0, _scanWatchdog = null; // scan-loop stall watchdog
 
 async function startRecv() {
   const startBtn = $('startRecv');
+  const wasFocused = document.activeElement === startBtn;
   const originalText = startBtn.textContent;
   startBtn.disabled = true;
   startBtn.textContent = 'Starting...';
@@ -222,6 +233,8 @@ async function startRecv() {
         `A camera requires HTTPS or localhost — see the README.`;
       // recvHint is not a live region, so mirror the failure into one that is.
       $('recvStat').textContent = `Camera could not start: ${e.message}`;
+      startBtn.disabled = false;
+      if (wasFocused) startBtn.focus();
       return;
     }
     const video = $('video');
@@ -240,15 +253,24 @@ async function startRecv() {
     scanning = true;
     _scanFrames = 0; _scanFpsAt = performance.now(); scanFps = 0; _rxStart = 0;
     $('stopRecv').disabled = false;
+    if (wasFocused) $('stopRecv').focus();
     $('recvResult').innerHTML = '';
     $('recvStat').textContent =
       `Scanning (${scanner.mode === 'native' ? 'native BarcodeDetector' : 'jsQR'})… point at the sender screen.`;
     scanLoop();
     startScanWatchdog();
     syncWakeLock();
+  } catch (e) {
+    startBtn.disabled = false;
+    if (wasFocused) startBtn.focus();
+    throw e;
   } finally {
     startBtn.textContent = originalText;
-    if (!scanning) startBtn.disabled = false;
+    if (!scanning) {
+      startBtn.disabled = false;
+      // If start successfully completed and we didn't throw,
+      // focus is safely on stopRecv now.
+    }
   }
 }
 
@@ -344,8 +366,11 @@ function onDone(result) {
   clearScanWatchdog();
   stopStream();
   syncWakeLock();
+  const stopBtn = $('stopRecv');
+  const wasFocused = document.activeElement === stopBtn;
   $('startRecv').disabled = false;
-  $('stopRecv').disabled = true;
+  if (wasFocused) $('startRecv').focus();
+  stopBtn.disabled = true;
   $('recvBar').style.width = '100%';
   $('recvBarWrap')?.setAttribute('aria-valuenow', '100');
 
@@ -374,8 +399,11 @@ function stopRecv() {
   clearScanWatchdog();
   stopStream();
   syncWakeLock();
+  const stopBtn = $('stopRecv');
+  const wasFocused = document.activeElement === stopBtn;
   $('startRecv').disabled = false;
-  $('stopRecv').disabled = true;
+  if (wasFocused) $('startRecv').focus();
+  stopBtn.disabled = true;
   $('recvStat').textContent = 'Camera stopped.';
 }
 
