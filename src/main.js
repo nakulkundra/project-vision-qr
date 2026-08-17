@@ -64,8 +64,13 @@ async function startSend() {
   const file = fileInput.files[0];
 
   const startBtn = $('startSend');
+  if (startBtn.getAttribute('aria-disabled') === 'true') return;
+  const stopBtn = $('stopSend');
+  const wasFocused = document.activeElement === startBtn;
   const originalText = startBtn.textContent;
-  startBtn.disabled = true;
+
+  // Use aria-disabled during async setup to prevent focus drop
+  startBtn.setAttribute('aria-disabled', 'true');
   startBtn.textContent = 'Processing...';
 
   try {
@@ -126,14 +131,22 @@ async function startSend() {
     tick();
 
     sendTimer = setInterval(tick, Math.round(1000 / fps));
-    $('stopSend').disabled = false;
+    stopBtn.disabled = false;
+
+    // Now that setup is complete, it's safe to disable Start and move focus
+    startBtn.removeAttribute('aria-disabled');
+    startBtn.disabled = true;
+    if (wasFocused) stopBtn.focus();
+
     syncWakeLock();
   } catch (e) {
-    startBtn.disabled = false;
     throw e;
   } finally {
     startBtn.textContent = originalText;
-    if (!scanning) startBtn.disabled = false;
+    if (!sendTimer) {
+      startBtn.removeAttribute('aria-disabled');
+      if (!scanning) startBtn.disabled = false;
+    }
   }
 }
 
@@ -194,8 +207,13 @@ let _scanArmedAt = 0, _scanWatchdog = null; // scan-loop stall watchdog
 
 async function startRecv() {
   const startBtn = $('startRecv');
+  if (startBtn.getAttribute('aria-disabled') === 'true') return;
+  const stopBtn = $('stopRecv');
+  const wasFocused = document.activeElement === startBtn;
   const originalText = startBtn.textContent;
-  startBtn.disabled = true;
+
+  // Use aria-disabled during async setup to prevent focus drop
+  startBtn.setAttribute('aria-disabled', 'true');
   startBtn.textContent = 'Starting...';
 
   try {
@@ -239,16 +257,28 @@ async function startRecv() {
     receiver = new Receiver(onProgress, onDone);
     scanning = true;
     _scanFrames = 0; _scanFpsAt = performance.now(); scanFps = 0; _rxStart = 0;
-    $('stopRecv').disabled = false;
+
+    stopBtn.disabled = false;
+
+    // Now that setup is complete, it's safe to disable Start and move focus
+    startBtn.removeAttribute('aria-disabled');
+    startBtn.disabled = true;
+    if (wasFocused) stopBtn.focus();
+
     $('recvResult').innerHTML = '';
     $('recvStat').textContent =
       `Scanning (${scanner.mode === 'native' ? 'native BarcodeDetector' : 'jsQR'})… point at the sender screen.`;
     scanLoop();
     startScanWatchdog();
     syncWakeLock();
+  } catch (e) {
+    throw e;
   } finally {
     startBtn.textContent = originalText;
-    if (!scanning) startBtn.disabled = false;
+    if (!scanning) {
+      startBtn.removeAttribute('aria-disabled');
+      startBtn.disabled = false;
+    }
   }
 }
 
