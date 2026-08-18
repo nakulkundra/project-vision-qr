@@ -64,8 +64,9 @@ async function startSend() {
   const file = fileInput.files[0];
 
   const startBtn = $('startSend');
+  if (startBtn.getAttribute('aria-disabled') === 'true') return;
   const originalText = startBtn.textContent;
-  startBtn.disabled = true;
+  startBtn.setAttribute('aria-disabled', 'true');
   startBtn.textContent = 'Processing...';
 
   try {
@@ -129,11 +130,11 @@ async function startSend() {
     $('stopSend').disabled = false;
     syncWakeLock();
   } catch (e) {
-    startBtn.disabled = false;
     throw e;
   } finally {
     startBtn.textContent = originalText;
-    if (!scanning) startBtn.disabled = false;
+    startBtn.removeAttribute('aria-disabled');
+    if (scanning) startBtn.disabled = true;
   }
 }
 
@@ -141,7 +142,9 @@ function stopSend() {
   if (sendTimer) clearInterval(sendTimer);
   sendTimer = null;
   $('startSend').disabled = false;
-  $('stopSend').disabled = true;
+  const stopBtn = $('stopSend');
+  if (document.activeElement === stopBtn) $('startSend').focus();
+  stopBtn.disabled = true;
   syncWakeLock();
 }
 
@@ -194,8 +197,9 @@ let _scanArmedAt = 0, _scanWatchdog = null; // scan-loop stall watchdog
 
 async function startRecv() {
   const startBtn = $('startRecv');
+  if (startBtn.getAttribute('aria-disabled') === 'true') return;
   const originalText = startBtn.textContent;
-  startBtn.disabled = true;
+  startBtn.setAttribute('aria-disabled', 'true');
   startBtn.textContent = 'Starting...';
 
   try {
@@ -239,16 +243,21 @@ async function startRecv() {
     receiver = new Receiver(onProgress, onDone);
     scanning = true;
     _scanFrames = 0; _scanFpsAt = performance.now(); scanFps = 0; _rxStart = 0;
-    $('stopRecv').disabled = false;
     $('recvResult').innerHTML = '';
     $('recvStat').textContent =
       `Scanning (${scanner.mode === 'native' ? 'native BarcodeDetector' : 'jsQR'})… point at the sender screen.`;
+
+    const stopBtn = $('stopRecv');
+    stopBtn.disabled = false;
+    if (document.activeElement === startBtn) stopBtn.focus();
+
     scanLoop();
     startScanWatchdog();
     syncWakeLock();
   } finally {
     startBtn.textContent = originalText;
-    if (!scanning) startBtn.disabled = false;
+    startBtn.removeAttribute('aria-disabled');
+    if (scanning) startBtn.disabled = true;
   }
 }
 
@@ -375,7 +384,9 @@ function stopRecv() {
   stopStream();
   syncWakeLock();
   $('startRecv').disabled = false;
-  $('stopRecv').disabled = true;
+  const stopBtn = $('stopRecv');
+  if (document.activeElement === stopBtn) $('startRecv').focus();
+  stopBtn.disabled = true;
   $('recvStat').textContent = 'Camera stopped.';
 }
 
