@@ -8,15 +8,23 @@
 import { LTEncoder, robustSolitonCDF } from './fountain.js';
 import { splitIntoBlocks, buildMeta, buildData, sha256 } from './protocol.js';
 
+// Secure random helper replacing Math.random()
+function secureRandomUint16() {
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    return crypto.getRandomValues(new Uint16Array(1))[0];
+  }
+  return Math.floor(Math.random() * 0x10000);
+}
+
 export class Sender {
   constructor(fileBytes, filename, opts = {}) {
     this.fileBytes = fileBytes;
     this.filename = filename;
     this.blockSize = opts.blockSize || 128;
     this.metaEvery = opts.metaEvery || 25; // one META per this many DATA frames
-    this.sessionId = opts.sessionId ?? (Math.floor(Math.random() * 0x10000) & 0xffff);
+    this.sessionId = opts.sessionId ?? (secureRandomUint16() & 0xffff);
 
-    this._seed = (Math.floor(Math.random() * 0x10000) << 16) >>> 0; // seed base
+    this._seed = (secureRandomUint16() << 16) >>> 0; // seed base
     this._dataCount = 0;
     this.ready = false;
   }
