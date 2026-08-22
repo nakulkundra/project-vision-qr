@@ -17,20 +17,30 @@ const CHAR_TO_VAL = (() => {
   return m;
 })();
 
+// ⚡ Bolt: Precomputed LUTs for base45 encoding eliminate hot-loop math and string concatenations.
+const B45_LUT = new Array(65536);
+for (let i = 0; i < 65536; i++) {
+  let n = i;
+  let m1 = n % 45; n = (n - m1) / 45;
+  let m2 = n % 45; n = (n - m2) / 45;
+  B45_LUT[i] = ALPHABET[m1] + ALPHABET[m2] + ALPHABET[n];
+}
+const B45_LUT_1 = new Array(256);
+for (let i = 0; i < 256; i++) {
+  let n = i;
+  let m = n % 45; n = (n - m) / 45;
+  B45_LUT_1[i] = ALPHABET[m] + ALPHABET[n];
+}
+
 // Encode bytes -> base45 string.
 export function encodeBase45(bytes) {
   let out = '';
   let i = 0;
   for (; i + 1 < bytes.length; i += 2) {
-    let n = bytes[i] * 256 + bytes[i + 1]; // 0..65535 -> exactly 3 symbols
-    let m1 = n % 45; n = (n - m1) / 45;
-    let m2 = n % 45; n = (n - m2) / 45;
-    out += ALPHABET[m1] + ALPHABET[m2] + ALPHABET[n];
+    out += B45_LUT[bytes[i] * 256 + bytes[i + 1]];
   }
   if (i < bytes.length) {
-    let n = bytes[i]; // single trailing byte -> 2 symbols
-    let m = n % 45; n = (n - m) / 45;
-    out += ALPHABET[m] + ALPHABET[n];
+    out += B45_LUT_1[bytes[i]];
   }
   return out;
 }
