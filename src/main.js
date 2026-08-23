@@ -64,8 +64,9 @@ async function startSend() {
   const file = fileInput.files[0];
 
   const startBtn = $('startSend');
+  if (startBtn.getAttribute('aria-disabled') === 'true') return;
+  startBtn.setAttribute('aria-disabled', 'true');
   const originalText = startBtn.textContent;
-  startBtn.disabled = true;
   startBtn.textContent = 'Processing...';
 
   try {
@@ -127,12 +128,15 @@ async function startSend() {
 
     sendTimer = setInterval(tick, Math.round(1000 / fps));
     $('stopSend').disabled = false;
+    $('stopSend').focus();
+    startBtn.disabled = true;
     syncWakeLock();
   } catch (e) {
     startBtn.disabled = false;
     throw e;
   } finally {
     startBtn.textContent = originalText;
+    startBtn.removeAttribute('aria-disabled');
     if (!scanning) startBtn.disabled = false;
   }
 }
@@ -142,6 +146,7 @@ function stopSend() {
   sendTimer = null;
   $('startSend').disabled = false;
   $('stopSend').disabled = true;
+  $('startSend').focus();
   syncWakeLock();
 }
 
@@ -194,8 +199,9 @@ let _scanArmedAt = 0, _scanWatchdog = null; // scan-loop stall watchdog
 
 async function startRecv() {
   const startBtn = $('startRecv');
+  if (startBtn.getAttribute('aria-disabled') === 'true') return;
+  startBtn.setAttribute('aria-disabled', 'true');
   const originalText = startBtn.textContent;
-  startBtn.disabled = true;
   startBtn.textContent = 'Starting...';
 
   try {
@@ -243,11 +249,14 @@ async function startRecv() {
     $('recvResult').innerHTML = '';
     $('recvStat').textContent =
       `Scanning (${scanner.mode === 'native' ? 'native BarcodeDetector' : 'jsQR'})… point at the sender screen.`;
+    $('stopRecv').focus();
+    startBtn.disabled = true;
     scanLoop();
     startScanWatchdog();
     syncWakeLock();
   } finally {
     startBtn.textContent = originalText;
+    startBtn.removeAttribute('aria-disabled');
     if (!scanning) startBtn.disabled = false;
   }
 }
@@ -346,6 +355,7 @@ function onDone(result) {
   syncWakeLock();
   $('startRecv').disabled = false;
   $('stopRecv').disabled = true;
+  $('startRecv').focus();
   $('recvBar').style.width = '100%';
   $('recvBarWrap')?.setAttribute('aria-valuenow', '100');
 
@@ -376,6 +386,7 @@ function stopRecv() {
   syncWakeLock();
   $('startRecv').disabled = false;
   $('stopRecv').disabled = true;
+  $('startRecv').focus();
   $('recvStat').textContent = 'Camera stopped.';
 }
 
