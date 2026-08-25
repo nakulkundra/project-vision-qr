@@ -49,6 +49,9 @@ let sendTimer = null;
 let frameNo = 0;
 
 async function startSend() {
+  const startBtn = $('startSend');
+  if (startBtn.getAttribute('aria-disabled') === 'true') return;
+
   const fileInput = $('file');
   // Inline validation rather than alert(): a modal dialog is disruptive, is not
   // announced as a field error, and gives no way to associate the message with
@@ -63,9 +66,8 @@ async function startSend() {
   fileInput.removeAttribute('aria-invalid');
   const file = fileInput.files[0];
 
-  const startBtn = $('startSend');
   const originalText = startBtn.textContent;
-  startBtn.disabled = true;
+  startBtn.setAttribute('aria-disabled', 'true');
   startBtn.textContent = 'Processing...';
 
   try {
@@ -126,14 +128,22 @@ async function startSend() {
     tick();
 
     sendTimer = setInterval(tick, Math.round(1000 / fps));
-    $('stopSend').disabled = false;
+    const stopBtn = $('stopSend');
+    stopBtn.disabled = false;
+    stopBtn.focus();
+    startBtn.disabled = true;
+    startBtn.removeAttribute('aria-disabled');
     syncWakeLock();
   } catch (e) {
     startBtn.disabled = false;
+    startBtn.removeAttribute('aria-disabled');
     throw e;
   } finally {
     startBtn.textContent = originalText;
-    if (!scanning) startBtn.disabled = false;
+    if (!scanning && !sendTimer) {
+      startBtn.disabled = false;
+      startBtn.removeAttribute('aria-disabled');
+    }
   }
 }
 
@@ -194,8 +204,10 @@ let _scanArmedAt = 0, _scanWatchdog = null; // scan-loop stall watchdog
 
 async function startRecv() {
   const startBtn = $('startRecv');
+  if (startBtn.getAttribute('aria-disabled') === 'true') return;
+
   const originalText = startBtn.textContent;
-  startBtn.disabled = true;
+  startBtn.setAttribute('aria-disabled', 'true');
   startBtn.textContent = 'Starting...';
 
   try {
@@ -239,7 +251,11 @@ async function startRecv() {
     receiver = new Receiver(onProgress, onDone);
     scanning = true;
     _scanFrames = 0; _scanFpsAt = performance.now(); scanFps = 0; _rxStart = 0;
-    $('stopRecv').disabled = false;
+    const stopBtn = $('stopRecv');
+    stopBtn.disabled = false;
+    stopBtn.focus();
+    startBtn.disabled = true;
+    startBtn.removeAttribute('aria-disabled');
     $('recvResult').innerHTML = '';
     $('recvStat').textContent =
       `Scanning (${scanner.mode === 'native' ? 'native BarcodeDetector' : 'jsQR'})… point at the sender screen.`;
@@ -248,7 +264,10 @@ async function startRecv() {
     syncWakeLock();
   } finally {
     startBtn.textContent = originalText;
-    if (!scanning) startBtn.disabled = false;
+    if (!scanning) {
+      startBtn.disabled = false;
+      startBtn.removeAttribute('aria-disabled');
+    }
   }
 }
 
