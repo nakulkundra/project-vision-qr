@@ -64,8 +64,9 @@ async function startSend() {
   const file = fileInput.files[0];
 
   const startBtn = $('startSend');
+  if (startBtn.getAttribute('aria-disabled') === 'true') return;
   const originalText = startBtn.textContent;
-  startBtn.disabled = true;
+  startBtn.setAttribute('aria-disabled', 'true');
   startBtn.textContent = 'Processing...';
 
   try {
@@ -126,14 +127,22 @@ async function startSend() {
     tick();
 
     sendTimer = setInterval(tick, Math.round(1000 / fps));
+    const wasActive = document.activeElement === startBtn;
     $('stopSend').disabled = false;
+    if (wasActive) $('stopSend').focus();
+    startBtn.disabled = true;
+    startBtn.removeAttribute('aria-disabled');
     syncWakeLock();
   } catch (e) {
+    startBtn.removeAttribute('aria-disabled');
     startBtn.disabled = false;
     throw e;
   } finally {
     startBtn.textContent = originalText;
-    if (!scanning) startBtn.disabled = false;
+    if (!scanning && !sendTimer) {
+      startBtn.removeAttribute('aria-disabled');
+      startBtn.disabled = false;
+    }
   }
 }
 
@@ -194,8 +203,9 @@ let _scanArmedAt = 0, _scanWatchdog = null; // scan-loop stall watchdog
 
 async function startRecv() {
   const startBtn = $('startRecv');
+  if (startBtn.getAttribute('aria-disabled') === 'true') return;
   const originalText = startBtn.textContent;
-  startBtn.disabled = true;
+  startBtn.setAttribute('aria-disabled', 'true');
   startBtn.textContent = 'Starting...';
 
   try {
@@ -239,16 +249,27 @@ async function startRecv() {
     receiver = new Receiver(onProgress, onDone);
     scanning = true;
     _scanFrames = 0; _scanFpsAt = performance.now(); scanFps = 0; _rxStart = 0;
+    const wasActive = document.activeElement === startBtn;
     $('stopRecv').disabled = false;
+    if (wasActive) $('stopRecv').focus();
+    startBtn.disabled = true;
+    startBtn.removeAttribute('aria-disabled');
     $('recvResult').innerHTML = '';
     $('recvStat').textContent =
       `Scanning (${scanner.mode === 'native' ? 'native BarcodeDetector' : 'jsQR'})… point at the sender screen.`;
     scanLoop();
     startScanWatchdog();
     syncWakeLock();
+  } catch (e) {
+    startBtn.removeAttribute('aria-disabled');
+    startBtn.disabled = false;
+    throw e;
   } finally {
     startBtn.textContent = originalText;
-    if (!scanning) startBtn.disabled = false;
+    if (!scanning) {
+      startBtn.removeAttribute('aria-disabled');
+      startBtn.disabled = false;
+    }
   }
 }
 

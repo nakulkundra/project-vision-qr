@@ -1,3 +1,7 @@
 ## 2024-05-18 - Async Loading States for Heavy UI Operations
 **Learning:** When interacting with files or hardware devices (like `file.arrayBuffer()` or `getUserMedia`), the promise resolution can block or delay significantly. Without immediate visual feedback, users may assume the app is frozen or spam the trigger button, leading to unexpected behaviors or race conditions.
 **Action:** Always wrap async initializations for hardware or file reading in a `try/finally` block that disables the trigger button and provides descriptive loading text (e.g., "Starting...", "Processing...") to confirm the system has registered the interaction.
+
+## 2026-08-26 - Prevent Focus Loss on Async Buttons
+**Learning:** Setting `disabled = true` on an actively focused button before an async operation completes drops focus immediately to `document.body`, breaking keyboard navigation.
+**Action:** Use `aria-disabled="true"` during the async setup phase. Only apply `disabled = true` after shifting focus to the next logical control (e.g., the 'Stop' button).
