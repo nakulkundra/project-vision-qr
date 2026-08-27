@@ -14,9 +14,20 @@ export class Sender {
     this.filename = filename;
     this.blockSize = opts.blockSize || 128;
     this.metaEvery = opts.metaEvery || 25; // one META per this many DATA frames
-    this.sessionId = opts.sessionId ?? (Math.floor(Math.random() * 0x10000) & 0xffff);
+    let r1, r2;
+    // Use Web Crypto API for secure random seeds if available, avoiding weak Math.random PRNG
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+      const buf = new Uint16Array(2);
+      crypto.getRandomValues(buf);
+      r1 = buf[0];
+      r2 = buf[1];
+    } else {
+      r1 = Math.floor(Math.random() * 0x10000);
+      r2 = Math.floor(Math.random() * 0x10000);
+    }
 
-    this._seed = (Math.floor(Math.random() * 0x10000) << 16) >>> 0; // seed base
+    this.sessionId = opts.sessionId !== undefined ? opts.sessionId : (r1 & 0xffff);
+    this._seed = (r2 << 16) >>> 0; // seed base
     this._dataCount = 0;
     this.ready = false;
   }
