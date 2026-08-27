@@ -114,13 +114,13 @@
       transition: filter .15s, transform .06s;
       min-height: 44px;
     }
-    .action:hover:not(:disabled) { filter: brightness(1.07); }
-    .action:active:not(:disabled) { transform: translateY(1px); }
+    .action:hover:not(:disabled):not([aria-disabled="true"]) { filter: brightness(1.07); }
+    .action:active:not(:disabled):not([aria-disabled="true"]) { transform: translateY(1px); }
     .action.secondary {
       background: var(--surface-2); color: var(--fg); border-color: var(--border-2);
     }
-    .action.secondary:hover:not(:disabled) { background: #0a2b26; filter: none; }
-    button:disabled { opacity: .45; cursor: not-allowed; }
+    .action.secondary:hover:not(:disabled):not([aria-disabled="true"]) { background: #0a2b26; filter: none; }
+    button:disabled, button[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
     .action.compact { width: auto; padding: 8px 12px; font-size: 13px; white-space: nowrap; }
     .btn-row { display: flex; gap: var(--sp-3); margin-top: var(--sp-4); }
     .btn-row .action { margin-top: 0; }
